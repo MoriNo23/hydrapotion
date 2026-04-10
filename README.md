@@ -1,40 +1,38 @@
 # Hydrapotion
 
-App de seguimiento de hidratacion construida con Go + Wails.
+Desktop hydration tracker with smart reminders and mood-based recommendations.
 
-## Caracteristicas
+![Go](https://img.shields.io/badge/Go-00ADD8?style=flat&logo=go&logoColor=white)
+![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)
+![Wails](https://img.shields.io/badge/Wails-2.12-21B9D3?style=flat)
 
-- Tracker de agua diario
-- Historial de consumo
-- Clima integrado (Open-Meteo)
-- Sistema de mood que afecta recomendaciones
-- Sonido ASMR de teclado
+## Stack
 
-## Requisitos
+`Go` `Wails` `React` `TypeScript` `SQLite` `Open-Meteo API`
 
-- Go 1.24+
-- Node.js 18+
-- Wails CLI v2.12+
+## Features
 
-## Desarrollo
+- Daily water intake tracking with progress visualization
+- Mood-based hydration recommendations
+- Smart reminders with visual countdown timer
+- Weather integration for context-aware suggestions
+- Weekly/monthly statistics and history
+- Dark/Light theme, ES/EN language support
+- Cross-platform desktop app
+
+## Build
 
 ```bash
-# Instalar Wails
-go install github.com/wailsapp/wails/v2/cmd/wails@latest
-
-# Ejecutar en modo desarrollo
-wails dev
-
-# Compilar
 wails build
 ```
 
-## Compilacion
+## Run Dev
 
-El binario se genera en `build/bin/hydrapotion`
+```bash
+wails dev
+```
 
-Tiempo de compilacion: ~8 segundos
-
-## Licencia
+## License
 
 MIT
