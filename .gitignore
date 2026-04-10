@@ -1,5 +1,6 @@
 # Binarios compilados
 build/
+hydrapotion
 *.exe
 *.exe~
 *.dll
