@@ -62,12 +62,15 @@ type MoodEntry struct {
 
 // App estado de la aplicacion
 type App struct {
-	settings    Settings
-	history     map[string]int
-	moodHistory []MoodEntry
-	mu          sync.RWMutex
-	ctx         context.Context
-	shouldClose bool
+	settings        Settings
+	history         map[string]int
+	moodHistory     []MoodEntry
+	mu              sync.RWMutex
+	ctx             context.Context
+	shouldClose     bool
+	reminderTimer   *time.Timer
+	lastIntakeTime  time.Time
+	reminderActive  bool
 }
 
 var appInstance *App
@@ -84,9 +87,11 @@ func main() {
 			ReminderInterval: 1800,
 			CurrentMood:      MoodNeutral,
 		},
-		history:     make(map[string]int),
-		moodHistory: make([]MoodEntry, 0),
-		shouldClose: false,
+		history:        make(map[string]int),
+		moodHistory:    make([]MoodEntry, 0),
+		shouldClose:    false,
+		lastIntakeTime: time.Now(),
+		reminderActive: false,
 	}
 	appInstance.loadSettings()
 	appInstance.loadHistory()
@@ -175,6 +180,80 @@ func (a *App) onExit() {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	// Iniciar el timer de recordatorio
+	go a.startReminderTimer()
+}
+
+// --- Reminder System ---
+
+func (a *App) startReminderTimer() {
+	a.mu.RLock()
+	interval := time.Duration(a.settings.ReminderInterval) * time.Second
+	a.mu.RUnlock()
+
+	a.mu.Lock()
+	a.lastIntakeTime = time.Now()
+	a.reminderActive = true
+	a.mu.Unlock()
+
+	// Timer inicial
+	a.mu.Lock()
+	a.reminderTimer = time.AfterFunc(interval, a.showReminder)
+	a.mu.Unlock()
+}
+
+func (a *App) resetReminderTimer() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	a.lastIntakeTime = time.Now()
+
+	if a.reminderTimer != nil {
+		a.reminderTimer.Stop()
+	}
+
+	interval := time.Duration(a.settings.ReminderInterval) * time.Second
+	a.reminderTimer = time.AfterFunc(interval, a.showReminder)
+}
+
+func (a *App) showReminder() {
+	a.mu.RLock()
+	ctx := a.ctx
+	consumed := a.settings.TodayConsumed
+	goal := a.settings.DailyGoal
+	a.mu.RUnlock()
+
+	if ctx == nil {
+		return
+	}
+
+	// Enviar evento al frontend
+	runtime.EventsEmit(ctx, "show-reminder", map[string]interface{}{
+		"consumed": consumed,
+		"goal":     goal,
+	})
+
+	// Mostrar la ventana si esta oculta
+	runtime.WindowShow(ctx)
+	runtime.WindowSetAlwaysOnTop(ctx, true)
+}
+
+// SnoozeReminder pospone el recordatorio
+func (a *App) SnoozeReminder(minutes int) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if a.reminderTimer != nil {
+		a.reminderTimer.Stop()
+	}
+
+	interval := time.Duration(minutes) * time.Minute
+	a.reminderTimer = time.AfterFunc(interval, a.showReminder)
+}
+
+// DismissReminder cierra el modal y reinicia el timer normal
+func (a *App) DismissReminder() {
+	a.resetReminderTimer()
 }
 
 // --- API Methods ---
@@ -209,6 +288,14 @@ func (a *App) AddWater(ml int) Settings {
 
 	a.saveSettings()
 	a.saveHistory()
+
+	// Reiniciar timer de recordatorio
+	a.lastIntakeTime = time.Now()
+	if a.reminderTimer != nil {
+		a.reminderTimer.Stop()
+		interval := time.Duration(a.settings.ReminderInterval) * time.Second
+		a.reminderTimer = time.AfterFunc(interval, a.showReminder)
+	}
 
 	return a.settings
 }

@@ -4,6 +4,8 @@ import {main} from '../models';
 
 export function AddWater(arg1:number):Promise<main.Settings>;
 
+export function DismissReminder():Promise<void>;
+
 export function GetMonthlyData():Promise<Array<main.HistoryDay>>;
 
 export function GetMoodHistory():Promise<Array<main.MoodEntry>>;
@@ -23,3 +25,5 @@ export function SetMood(arg1:main.Mood):Promise<main.Settings>;
 export function SetReminderInterval(arg1:number):Promise<main.Settings>;
 
 export function SetWeight(arg1:number):Promise<main.Settings>;
+
+export function SnoozeReminder(arg1:number):Promise<void>;

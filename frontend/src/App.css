@@ -486,3 +486,237 @@ body {
  color: var(--accent);
  font-weight: 500;
 }
+
+/* ========================================
+   REMINDER MODAL STYLES
+   ======================================== */
+
+.modal-overlay {
+ position: fixed;
+ top: 0;
+ left: 0;
+ right: 0;
+ bottom: 0;
+ background: rgba(11, 23, 32, 0.85);
+ backdrop-filter: blur(8px);
+ display: flex;
+ align-items: center;
+ justify-content: center;
+ z-index: 1000;
+ opacity: 0;
+ transition: opacity 0.3s ease;
+}
+
+.modal-overlay.visible {
+ opacity: 1;
+}
+
+.modal-content {
+ background: var(--surface);
+ border: 1px solid var(--border2);
+ border-radius: 24px;
+ padding: 24px;
+ width: 300px;
+ max-width: 90vw;
+ transform: scale(0.9) translateY(20px);
+ transition: transform 0.3s ease;
+ box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.modal-content.visible {
+ transform: scale(1) translateY(0);
+}
+
+.modal-header {
+ display: flex;
+ flex-direction: column;
+ align-items: center;
+ gap: 8px;
+ margin-bottom: 20px;
+}
+
+.water-icon {
+ width: 64px;
+ height: 64px;
+ background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+ border-radius: 50%;
+ display: flex;
+ align-items: center;
+ justify-content: center;
+ animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+ 0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(78, 178, 215, 0.4); }
+ 50% { transform: scale(1.05); box-shadow: 0 0 20px 10px rgba(78, 178, 215, 0.2); }
+}
+
+.water-icon svg {
+ color: var(--white);
+}
+
+.modal-title {
+ font-size: 14px;
+ font-weight: 600;
+ letter-spacing: 2px;
+ color: var(--white);
+ text-transform: uppercase;
+ text-align: center;
+}
+
+.modal-progress {
+ background: var(--surface2);
+ border-radius: 12px;
+ padding: 12px;
+ margin-bottom: 16px;
+}
+
+.modal-progress-label {
+ font-size: 9px;
+ color: var(--muted);
+ text-transform: uppercase;
+ letter-spacing: 1px;
+ margin-bottom: 8px;
+ display: block;
+}
+
+.modal-progress-bar {
+ height: 8px;
+ background: var(--bg);
+ border-radius: 4px;
+ overflow: hidden;
+ margin-bottom: 6px;
+}
+
+.modal-progress-fill {
+ height: 100%;
+ background: linear-gradient(90deg, var(--accent) 0%, var(--accent2) 100%);
+ border-radius: 4px;
+ transition: width 0.5s ease;
+}
+
+.modal-progress-info {
+ display: flex;
+ justify-content: space-between;
+ font-size: 11px;
+ color: var(--muted);
+ margin-bottom: 8px;
+}
+
+.modal-segments {
+ display: flex;
+ gap: 3px;
+ justify-content: center;
+}
+
+.modal-seg {
+ width: 20px;
+ height: 6px;
+ background: var(--bg);
+ border-radius: 2px;
+ transition: background 0.3s ease;
+}
+
+.modal-seg.on {
+ background: linear-gradient(90deg, var(--accent) 0%, var(--accent2) 100%);
+}
+
+.modal-add-row {
+ display: flex;
+ gap: 8px;
+ margin-bottom: 16px;
+}
+
+.modal-add-btn {
+ flex: 1;
+ background: var(--surface2);
+ border: 1px solid var(--border);
+ border-radius: 12px;
+ padding: 12px 8px;
+ cursor: pointer;
+ transition: all 0.2s ease;
+ display: flex;
+ flex-direction: column;
+ align-items: center;
+ gap: 2px;
+}
+
+.modal-add-btn:hover {
+ background: var(--accent-bg);
+ border-color: var(--accent);
+ transform: translateY(-2px);
+}
+
+.modal-add-btn.primary {
+ background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+ border-color: transparent;
+}
+
+.modal-add-btn.primary .modal-add-ml,
+.modal-add-btn.primary .modal-add-unit {
+ color: var(--bg);
+}
+
+.modal-add-ml {
+ font-size: 20px;
+ font-weight: 600;
+ color: var(--white);
+ line-height: 1;
+}
+
+.modal-add-unit {
+ font-size: 10px;
+ color: var(--muted);
+ text-transform: uppercase;
+}
+
+.modal-action-row {
+ display: flex;
+ flex-direction: column;
+ gap: 12px;
+}
+
+.snooze-options {
+ display: flex;
+ gap: 6px;
+ justify-content: center;
+}
+
+.snooze-btn {
+ flex: 1;
+ background: transparent;
+ border: 1px solid var(--border);
+ border-radius: 8px;
+ padding: 8px;
+ font-size: 10px;
+ color: var(--muted);
+ cursor: pointer;
+ transition: all 0.2s ease;
+ text-transform: uppercase;
+ letter-spacing: 0.5px;
+}
+
+.snooze-btn:hover {
+ background: var(--accent-bg);
+ border-color: var(--accent);
+ color: var(--accent);
+}
+
+.dismiss-btn {
+ width: 100%;
+ background: transparent;
+ border: 1px solid var(--border);
+ border-radius: 10px;
+ padding: 10px;
+ font-size: 11px;
+ color: var(--muted);
+ cursor: pointer;
+ transition: all 0.2s ease;
+ text-transform: uppercase;
+ letter-spacing: 1px;
+}
+
+.dismiss-btn:hover {
+ background: rgba(255, 255, 255, 0.05);
+ color: var(--text);
+}

@@ -6,6 +6,10 @@ export function AddWater(arg1) {
   return window['go']['main']['App']['AddWater'](arg1);
 }
 
+export function DismissReminder() {
+  return window['go']['main']['App']['DismissReminder']();
+}
+
 export function GetMonthlyData() {
   return window['go']['main']['App']['GetMonthlyData']();
 }
@@ -44,4 +48,8 @@ export function SetReminderInterval(arg1) {
 
 export function SetWeight(arg1) {
   return window['go']['main']['App']['SetWeight'](arg1);
+}
+
+export function SnoozeReminder(arg1) {
+  return window['go']['main']['App']['SnoozeReminder'](arg1);
 }

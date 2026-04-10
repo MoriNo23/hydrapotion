@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
+import { EventsOn } from '../wailsjs/runtime/runtime';
 import { GetSettings, AddWater, SetWeight, SetLanguage, SetLocation, SetReminderInterval, GetWeeklyData, GetMonthlyData, SetMood, GetMoodRecommendation } from '../wailsjs/go/main/App';
+import ReminderModal from './ReminderModal';
 import './App.css';
 
 interface Settings {
@@ -88,6 +90,8 @@ function App() {
   const [location, setLocation] = useState("");
   const [weather, setWeather] = useState<{ temp: number; desc: string; hydroRec: string } | null>(null);
   const [moodRec, setMoodRec] = useState<MoodRecommendation | null>(null);
+ const [showReminder, setShowReminder] = useState(false);
+ const [reminderData, setReminderData] = useState<{ consumed: number; goal: number } | null>(null);
 
   const t = translations[settings.language as "es" | "en"] || translations.es;
   const consumed = settings.today_consumed;
@@ -96,10 +100,16 @@ function App() {
   const remaining = Math.max(0, goal - consumed);
   const segmentsFilled = Math.min(10, Math.floor((consumed / goal) * 10));
 
-  useEffect(() => {
-    loadSettings();
-    loadHistory();
-  }, []);
+ useEffect(() => {
+ loadSettings();
+ loadHistory();
+
+ // Escuchar evento de recordatorio desde Go
+ EventsOn('show-reminder', (data: { consumed: number; goal: number }) => {
+ setReminderData(data);
+ setShowReminder(true);
+ });
+ }, []);
 
   useEffect(() => {
     if (settings.location && !location) {
@@ -471,14 +481,27 @@ function App() {
               value={settings.language}
               onChange={(e) => setLanguage(e.target.value)}
             >
-              <option value="es">Espanol</option>
-              <option value="en">English</option>
-            </select>
-          </span>
-        </div>
-      </div>
-    </div>
-  );
+ <option value="es">Espanol</option>
+ <option value="en">English</option>
+ </select>
+ </span>
+ </div>
+ </div>
+
+ {/* Reminder Modal */}
+ {showReminder && reminderData && (
+ <ReminderModal
+ consumed={reminderData.consumed}
+ goal={reminderData.goal}
+ onClose={() => setShowReminder(false)}
+ onAdd={() => {
+ loadSettings();
+ loadHistory();
+ }}
+ />
+ )}
+ </div>
+ );
 }
 
 export default App;
