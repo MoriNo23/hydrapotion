@@ -1080,5 +1080,209 @@ RESPONSIVE
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 229, 255, 0.3);
+ background: rgba(0, 229, 255, 0.3);
+}
+
+/* ========================================
+REMINDER MODAL - POPUP STYLES
+======================================== */
+.modal-overlay {
+ position: fixed;
+ top: 0;
+ left: 0;
+ right: 0;
+ bottom: 0;
+ display: flex;
+ align-items: center;
+ justify-content: center;
+ background: transparent;
+ opacity: 0;
+ transition: opacity 0.3s ease;
+}
+
+.modal-overlay.visible {
+ opacity: 1;
+}
+
+.modal-content {
+ background: linear-gradient(145deg, #112240 0%, #0a192f 100%);
+ border: 1px solid rgba(0, 229, 255, 0.2);
+ border-radius: 20px;
+ padding: 24px;
+ width: 300px;
+ box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(0, 229, 255, 0.1);
+ transform: scale(0.9);
+ transition: transform 0.3s ease;
+}
+
+.modal-content.visible {
+ transform: scale(1);
+}
+
+.modal-header {
+ text-align: center;
+ margin-bottom: 20px;
+}
+
+.water-icon {
+ color: var(--cyan-electric);
+ margin-bottom: 12px;
+ animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+ 0%, 100% { transform: scale(1); opacity: 1; }
+ 50% { transform: scale(1.1); opacity: 0.8; }
+}
+
+.modal-title {
+ font-size: 18px;
+ font-weight: 600;
+ color: var(--text-primary);
+ letter-spacing: 1px;
+ text-transform: uppercase;
+}
+
+.modal-progress {
+ margin-bottom: 20px;
+}
+
+.modal-progress-label {
+ font-size: 12px;
+ color: var(--text-secondary);
+ margin-bottom: 8px;
+ display: block;
+}
+
+.modal-progress-bar {
+ height: 8px;
+ background: rgba(0, 229, 255, 0.1);
+ border-radius: 4px;
+ overflow: hidden;
+ margin-bottom: 8px;
+}
+
+.modal-progress-fill {
+ height: 100%;
+ background: linear-gradient(90deg, var(--cyan-electric), var(--blue-brilliant));
+ border-radius: 4px;
+ transition: width 0.5s ease;
+}
+
+.modal-progress-info {
+ display: flex;
+ justify-content: space-between;
+ font-size: 12px;
+ color: var(--text-secondary);
+ margin-bottom: 12px;
+}
+
+.modal-segments {
+ display: flex;
+ gap: 4px;
+ justify-content: center;
+}
+
+.modal-seg {
+ width: 24px;
+ height: 4px;
+ background: rgba(0, 229, 255, 0.15);
+ border-radius: 2px;
+ transition: all 0.3s ease;
+}
+
+.modal-seg.on {
+ background: var(--cyan-electric);
+ box-shadow: 0 0 8px rgba(0, 229, 255, 0.5);
+}
+
+.modal-add-row {
+ display: flex;
+ gap: 8px;
+ margin-bottom: 16px;
+}
+
+.modal-add-btn {
+ flex: 1;
+ display: flex;
+ flex-direction: column;
+ align-items: center;
+ padding: 12px 8px;
+ background: rgba(0, 229, 255, 0.05);
+ border: 1px solid rgba(0, 229, 255, 0.2);
+ border-radius: 12px;
+ cursor: pointer;
+ transition: all 0.2s ease;
+}
+
+.modal-add-btn:hover {
+ background: rgba(0, 229, 255, 0.15);
+ border-color: var(--cyan-electric);
+ transform: translateY(-2px);
+}
+
+.modal-add-btn.primary {
+ background: linear-gradient(135deg, rgba(0, 229, 255, 0.2), rgba(50, 159, 255, 0.2));
+ border-color: var(--cyan-electric);
+}
+
+.modal-add-btn.primary:hover {
+ background: linear-gradient(135deg, rgba(0, 229, 255, 0.3), rgba(50, 159, 255, 0.3));
+}
+
+.modal-add-ml {
+ font-size: 24px;
+ font-weight: 700;
+ color: var(--cyan-electric);
+}
+
+.modal-add-unit {
+ font-size: 11px;
+ color: var(--text-secondary);
+ text-transform: uppercase;
+}
+
+.modal-action-row {
+ display: flex;
+ justify-content: space-between;
+ align-items: center;
+ gap: 8px;
+}
+
+.snooze-options {
+ display: flex;
+ gap: 6px;
+}
+
+.snooze-btn {
+ padding: 8px 12px;
+ background: rgba(255, 255, 255, 0.05);
+ border: 1px solid rgba(255, 255, 255, 0.1);
+ border-radius: 8px;
+ color: var(--text-secondary);
+ font-size: 11px;
+ cursor: pointer;
+ transition: all 0.2s ease;
+}
+
+.snooze-btn:hover {
+ background: rgba(255, 255, 255, 0.1);
+ color: var(--text-primary);
+}
+
+.dismiss-btn {
+ padding: 8px 16px;
+ background: transparent;
+ border: 1px solid rgba(255, 255, 255, 0.1);
+ border-radius: 8px;
+ color: var(--text-muted);
+ font-size: 11px;
+ cursor: pointer;
+ transition: all 0.2s ease;
+}
+
+.dismiss-btn:hover {
+ background: rgba(255, 100, 100, 0.1);
+ border-color: rgba(255, 100, 100, 0.3);
+ color: #ff6b6b;
 }

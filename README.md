@@ -3,34 +3,38 @@
 Desktop hydration tracker with smart reminders and mood-based recommendations.
 
 ![Go](https://img.shields.io/badge/Go-00ADD8?style=flat&logo=go&logoColor=white)
-![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB)
-![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)
-![Wails](https://img.shields.io/badge/Wails_v3-21B9D3?style=flat)
+![Fyne](https://img.shields.io/badge/Fyne_v2-1A1A1A?style=flat)
 
 ## Stack
 
-`Go` `Wails v3` `React` `TypeScript` `SQLite` `Open-Meteo API`
+`Go` `Fyne v2` `SQLite` `Open-Meteo API`
 
 ## Features
 
 - Daily water tracking with progress visualization
 - **Dynamic goal based on mood + climate**:
-  - Base: 35ml/kg + height adjustment
-  - Mood history bonus (last 7 days stress)
-  - Current mood bonus (low: +100ml, tense: +150ml)
+  - Base: 35ml/kg
+  - Mood bonus (low: +200ml, tense: +400ml)
   - Climate bonus (temperature + humidity)
-- Mood-based recommendations (Well/Neutral/Low/Tense)
-- Smart reminders with snooze
-- Weather integration (Open-Meteo)
-- Weekly/monthly stats
-- System tray integration
-- Dark theme, ES/EN support
+- Mood-based recommendations (Bien/Neutral/Bajo/Tenso)
+- **System tray integration** - Quick access from taskbar
+- **Reminder popup** - Notifications with snooze options (5/15/30 min)
+- **Weekly chart** - Visual progress for last 7 days
+- Dark theme, Spanish language
+- Lightweight single binary
+
+## Screenshots
+
+The app features:
+- Main window with progress bar and quick-add buttons
+- System tray menu for quick water logging
+- Popup reminders with snooze functionality
+- Weekly progress chart
 
 ## Run
 
 ```bash
-cd frontend && npm install && npm run build
-cd .. && go run .
+go run .
 ```
 
 ## Build
@@ -39,10 +43,18 @@ cd .. && go run .
 go build -o hydrapotion .
 ```
 
+## Tech Notes
+
+Migrated from Wails v3 to Fyne v2 for:
+- Simpler build process (no frontend toolchain needed)
+- Native Go UI toolkit
+- Smaller binary size
+- Better system tray support on Linux
+
 ## License
 
 MIT
 
 ---
 
-Made with ❤️ by Mori
+Made with heart by Mori

@@ -1,702 +1,588 @@
 package main
 
 import (
- "embed"
- "encoding/json"
- "fmt"
- "log"
- "os"
- "path/filepath"
- "sync"
- "syscall"
- "time"
+	"encoding/json"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sync"
+	"time"
 
- "github.com/wailsapp/wails/v3/pkg/application"
- "github.com/wailsapp/wails/v3/pkg/events"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 )
 
-//go:embed all:frontend/dist
-var assets embed.FS
+// --- Models ---
 
-//go:embed icon.png
-var iconData []byte
-
-// Mood representa el estado emocional
-type Mood string
+type Mood int
 
 const (
-	MoodWell    Mood = "well"
-	MoodNeutral Mood = "neutral"
-	MoodLow     Mood = "low"
-	MoodTense   Mood = "tense"
+	MoodWell Mood = iota
+	MoodNeutral
+	MoodLow
+	MoodTense
 )
 
-// Settings estructura principal
+func (m Mood) String() string {
+	switch m {
+	case MoodWell:
+		return "Bien"
+	case MoodNeutral:
+		return "Neutral"
+	case MoodLow:
+		return "Bajo"
+	case MoodTense:
+		return "Tenso"
+	}
+	return "Neutral"
+}
+
 type Settings struct {
-	Weight          int    `json:"weight"`
-	Height          int    `json:"height"`           // Estatura en cm
-	TodayConsumed   int    `json:"today_consumed"`
-	DailyGoal       int    `json:"daily_goal"`
-	Language        string `json:"language"`
-	Location        string `json:"location"`
-	LastResetDate   string `json:"last_reset_date"`
-	ReminderInterval int   `json:"reminder_interval"`
-	CurrentMood      Mood  `json:"current_mood"`
+	Weight           int    `json:"weight"`
+	TodayConsumed    int    `json:"today_consumed"`
+	LastResetDate    string `json:"last_reset_date"`
+	Language         string `json:"language"`
+	Location         string `json:"location"`
+	ReminderInterval int    `json:"reminder_interval"` // en segundos
+	CurrentMood      Mood   `json:"current_mood"`
 }
 
-// HistoryDay entrada de historial
-type HistoryDay struct {
-	Day   string `json:"day"`
-	Ml    int    `json:"ml"`
-	Date  string `json:"date"`
-}
-
-// MoodEntry registro de mood
-type MoodEntry struct {
+type HistoryEntry struct {
 	Date string `json:"date"`
-	Mood Mood   `json:"mood"`
 	Ml   int    `json:"ml"`
 }
 
-// App servicio principal de la aplicacion
-type App struct {
-	settings      Settings
-	history       map[string]int
-	moodHistory   []MoodEntry
-	mu            sync.RWMutex
-	reminderTimer *time.Timer
-	lastIntakeTime time.Time
-	window        *application.WebviewWindow
-	systray       *application.SystemTray
+// --- App State ---
+
+type HydrapotionApp struct {
+	settings     Settings
+	history      []HistoryEntry
+	mu           sync.RWMutex
+	dataDir      string
+	reminder     *time.Timer
+	onUpdate     func()
+	mainWindow   fyne.Window
+	reminderWin  fyne.Window
+	app          fyne.App
 }
 
-func main() {
- // Single instance - lock file
- lockFile := "/tmp/hydrapotion.lock"
- lock, err := os.Create(lockFile)
- if err != nil {
- fmt.Println("Hydrapotion ya esta ejecutandose")
- return
- }
- err = syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
- if err != nil {
- fmt.Println("Hydrapotion ya esta ejecutandose")
- return
- }
- defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
- defer os.Remove(lockFile)
+func NewHydrapotionApp(a fyne.App) *HydrapotionApp {
+	home, _ := os.UserHomeDir()
+	dataDir := filepath.Join(home, ".hydrapotion")
+	os.MkdirAll(dataDir, 0755)
 
- // Crear aplicacion - UNA sola instancia
- appService := NewApp()
-
- app := application.New(application.Options{
- Name: "Hydrapotion",
- Description: "Desktop hydration tracker",
- Services: []application.Service{
- application.NewService(appService),
- },
- Assets: application.AssetOptions{
- Handler: application.AssetFileServerFS(assets),
- },
- })
-
- // Crear ventana principal
- window := app.Window.NewWithOptions(application.WebviewWindowOptions{
- Title: "Hydrapotion",
- Width: 340,
- Height: 760,
- BackgroundColour: application.NewRGB(11, 23, 32),
- URL: "/",
- Hidden: false,
- })
-
- // Maximizar la ventana al iniciar
- window.Maximise()
-
- // Ocultar en lugar de cerrar usando RegisterHook
- window.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
- e.Cancel()
- window.Hide()
- })
-
- // Guardar referencia a la ventana
- appService.window = window
-
- // Crear system tray
- systray := app.SystemTray.New()
- systray.SetIcon(iconData)
- systray.SetLabel("Hydrapotion")
- systray.SetTooltip("Hydrapotion - Tracker de hidratacion")
-
- // Menu del system tray (solo para click derecho)
- menu := app.NewMenu()
- menu.Add("Mostrar").OnClick(func(ctx *application.Context) {
- window.Show()
- window.Restore()
- window.Focus()
- })
- menu.AddSeparator()
- menu.Add("+150 ml").OnClick(func(ctx *application.Context) {
- appService.AddWater(150)
- })
- menu.Add("+250 ml").OnClick(func(ctx *application.Context) {
- appService.AddWater(250)
- })
- menu.Add("+500 ml").OnClick(func(ctx *application.Context) {
- appService.AddWater(500)
- })
- menu.AddSeparator()
- menu.Add("Salir").OnClick(func(ctx *application.Context) {
- app.Quit()
- })
- systray.SetMenu(menu)
-
- // Click izquierdo SOLO muestra la ventana (no toggle)
- systray.OnClick(func() {
- window.Show()
- window.Restore()
- window.Focus()
- window.SetAlwaysOnTop(true)
- window.SetAlwaysOnTop(false)
- })
-
- // Click derecho SOLO abre el menu (no muestra la ventana)
- systray.OnRightClick(func() {
- // El menu se abre automaticamente por SetMenu
- // No hacemos nada mas para evitar mostrar la ventana
- })
-
- appService.systray = systray
-
- // Registrar eventos
- application.RegisterEvent[map[string]interface{}]("show-reminder")
-
- if err := app.Run(); err != nil {
- log.Fatal(err)
- }
-}
-
-// NewApp crea una nueva instancia del servicio App
-func NewApp() *App {
-	a := &App{
+	h := &HydrapotionApp{
+		dataDir: dataDir,
+		app:     a,
 		settings: Settings{
 			Weight:           70,
-			Height:           170,
-			TodayConsumed:    0,
-			DailyGoal:        2450,
 			Language:         "es",
-			Location:         "",
-			LastResetDate:    todayStr(),
-			ReminderInterval: 1800,
+			ReminderInterval: 1800, // 30 min default
 			CurrentMood:      MoodNeutral,
 		},
-		history:       make(map[string]int),
-		moodHistory:   make([]MoodEntry, 0),
-		lastIntakeTime: time.Now(),
-	}
-	a.loadSettings()
-	a.loadHistory()
-	a.loadMoodHistory()
-	return a
-}
-
-// calculateDailyGoal calcula el objetivo diario basado en peso, estatura, mood histórico y clima
-func (a *App) calculateDailyGoal() int {
-	return a.calculateDailyGoalWithFactors(0, 0)
-}
-
-// calculateDailyGoalWithFactors calcula la meta con factores externos
-// temp: temperatura en °C, humidity: porcentaje de humedad (0-100)
-func (a *App) calculateDailyGoalWithFactors(temp int, humidity int) int {
-	weight := a.settings.Weight
-	height := a.settings.Height
-
-	// 1. BASE: 35ml/kg + ajuste por estatura
-	baseGoal := weight * 35
-	if height > 150 {
-		baseGoal += ((height - 150) / 10) * 100
 	}
 
-	// 2. BONIFICACIÓN POR MOOD HISTÓRICO (últimos 7 días)
-	moodBonus := a.calculateMoodHistoryBonus()
+	h.loadSettings()
+	h.loadHistory()
+	h.resetIfNewDay()
 
-	// 3. BONIFICACIÓN POR MOOD ACTUAL
-	currentMoodBonus := a.calculateCurrentMoodBonus()
-
-	// 4. BONIFICACIÓN POR CLIMA
-	climateBonus := a.calculateClimateBonus(temp, humidity)
-
-	totalGoal := baseGoal + moodBonus + currentMoodBonus + climateBonus
-
-	return totalGoal
+	return h
 }
 
-// calculateMoodHistoryBonus calcula bonus basado en últimos 7 días de mood
-func (a *App) calculateMoodHistoryBonus() int {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
+func (h *HydrapotionApp) dataFile(name string) string {
+	return filepath.Join(h.dataDir, name)
+}
 
-	// Contar días negativos en últimos 7 días
-	negativeDays := 0
-	sevenDaysAgo := time.Now().AddDate(0, 0, -7)
-
-	for _, entry := range a.moodHistory {
-		entryDate, err := time.Parse("2006-01-02", entry.Date)
-		if err != nil {
-			continue
-		}
-		if entryDate.After(sevenDaysAgo) && (entry.Mood == MoodLow || entry.Mood == MoodTense) {
-			negativeDays++
-		}
+func (h *HydrapotionApp) loadSettings() {
+	data, err := os.ReadFile(h.dataFile("settings.json"))
+	if err != nil {
+		return
 	}
+	json.Unmarshal(data, &h.settings)
+}
 
-	// Rangos conservadores basados en literatura de cortisol
-	switch negativeDays {
-	case 0, 1, 2:
-		return 0 // Fluctuación normal
-	case 3, 4:
-		return 150 // Estrés leve
-	case 5, 6:
-		return 300 // Estrés moderado
-	default: // 7 días
-		return 450 // Estrés crónico
+func (h *HydrapotionApp) saveSettings() {
+	data, _ := json.MarshalIndent(h.settings, "", " ")
+	os.WriteFile(h.dataFile("settings.json"), data, 0644)
+}
+
+func (h *HydrapotionApp) loadHistory() {
+	data, err := os.ReadFile(h.dataFile("history.json"))
+	if err != nil {
+		return
 	}
+	json.Unmarshal(data, &h.history)
 }
 
-// calculateCurrentMoodBonus calcula bonus por mood del día actual
-func (a *App) calculateCurrentMoodBonus() int {
-	switch a.settings.CurrentMood {
-	case MoodWell:
-		return 0
-	case MoodNeutral:
-		return 0
-	case MoodLow:
-		return 100 // Apetito reducido = menos agua de alimentos
-	case MoodTense:
-		return 150 // Cortisol elevado = mayor pérdida
-	default:
-		return 0
-	}
+func (h *HydrapotionApp) saveHistory() {
+	data, _ := json.MarshalIndent(h.history, "", " ")
+	os.WriteFile(h.dataFile("history.json"), data, 0644)
 }
 
-// calculateClimateBonus calcula bonus por temperatura y humedad
-func (a *App) calculateClimateBonus(temp int, humidity int) int {
-	bonus := 0
-
-	// Por temperatura (American College of Sports Medicine)
-	switch {
-	case temp < 20:
-		bonus += 0
-	case temp >= 20 && temp < 25:
-		bonus += 200 // Ligera pérdida por respiración
-	case temp >= 25 && temp < 30:
-		bonus += 400 // Sudoración moderada
-	case temp >= 30 && temp < 35:
-		bonus += 600 // Sudoración activa
-	case temp >= 35:
-		bonus += 800 // Alto riesgo
-	}
-
-	// Por humedad alta
-	if humidity > 70 {
-		bonus += 200 // Dificulta evaporación del sudor
-	}
-
-	return bonus
-}
-
-// Startup llamado cuando la app inicia
-func (a *App) Startup() {
-	go a.startReminderTimer()
-}
-
-// --- Reminder System ---
-
-func (a *App) startReminderTimer() {
-	a.mu.RLock()
-	interval := time.Duration(a.settings.ReminderInterval) * time.Second
-	a.mu.RUnlock()
-
-	a.mu.Lock()
-	a.lastIntakeTime = time.Now()
-	a.mu.Unlock()
-
-	a.mu.Lock()
-	a.reminderTimer = time.AfterFunc(interval, a.showReminder)
-	a.mu.Unlock()
-}
-
-func (a *App) resetReminderTimer() {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	a.lastIntakeTime = time.Now()
-
-	if a.reminderTimer != nil {
-		a.reminderTimer.Stop()
-	}
-
-	interval := time.Duration(a.settings.ReminderInterval) * time.Second
-	a.reminderTimer = time.AfterFunc(interval, a.showReminder)
-}
-
-func (a *App) showReminder() {
- // Emitir evento al frontend
- if a.window != nil {
- a.window.EmitEvent("show-reminder", map[string]interface{}{
- "consumed": a.settings.TodayConsumed,
- "goal":     a.settings.DailyGoal,
- })
- a.window.Show()
- }
-}
-
-// SnoozeReminder pospone el recordatorio
-func (a *App) SnoozeReminder(minutes int) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	if a.reminderTimer != nil {
-		a.reminderTimer.Stop()
-	}
-
-	interval := time.Duration(minutes) * time.Minute
-	a.reminderTimer = time.AfterFunc(interval, a.showReminder)
-}
-
-// DismissReminder reinicia el timer
-func (a *App) DismissReminder() {
-	a.resetReminderTimer()
-}
-
-// --- API Methods ---
-
-func (a *App) GetSettings() Settings {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	today := todayStr()
-	if a.settings.LastResetDate != today {
-		a.settings.TodayConsumed = 0
-		a.settings.LastResetDate = today
-		a.settings.CurrentMood = MoodNeutral
-		a.saveSettings()
-	}
-
-	return a.settings
-}
-
-func (a *App) AddWater(ml int) Settings {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	today := todayStr()
-	if a.settings.LastResetDate != today {
-		a.settings.TodayConsumed = 0
-		a.settings.LastResetDate = today
-	}
-
-	a.settings.TodayConsumed += ml
-	a.history[today] += ml
-
-	a.saveSettings()
-	a.saveHistory()
-
-	// Reiniciar timer
-	a.lastIntakeTime = time.Now()
-	if a.reminderTimer != nil {
-		a.reminderTimer.Stop()
-		interval := time.Duration(a.settings.ReminderInterval) * time.Second
-		a.reminderTimer = time.AfterFunc(interval, a.showReminder)
-	}
-
-	return a.settings
-}
-
-func (a *App) SetMood(mood Mood) Settings {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	a.settings.CurrentMood = mood
-	a.saveSettings()
-
-	entry := MoodEntry{
-		Date: time.Now().Format("2006-01-02 15:04:05"),
-		Mood: mood,
-		Ml:   a.settings.TodayConsumed,
-	}
-	a.moodHistory = append(a.moodHistory, entry)
-	a.saveMoodHistory()
-
-	return a.settings
-}
-
-func (a *App) GetMoodHistory() []MoodEntry {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	return a.moodHistory
-}
-
-func (a *App) GetMoodRecommendation(temp int) map[string]interface{} {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
-	mood := a.settings.CurrentMood
-	baseGoal := a.settings.Weight * 35
-	if a.settings.Height > 150 {
-		baseGoal += ((a.settings.Height - 150) / 10) * 100
-	}
-
-	// Calcular bonificaciones individuales
-	moodHistoryBonus := a.calculateMoodHistoryBonus()
-	currentMoodBonus := a.calculateCurrentMoodBonus()
-	climateBonus := a.calculateClimateBonus(temp, 0)
-
-	totalGoal := baseGoal + moodHistoryBonus + currentMoodBonus + climateBonus
-
-	// Devolver códigos, no textos hardcodeados
-	// El frontend se encarga de traducir
-	var recommendationKey string
-	var moodAdjustmentKey string
-
-	switch mood {
-	case MoodWell:
-		recommendationKey = "mood_well_rec"
-		moodAdjustmentKey = "mood_normal"
-	case MoodNeutral:
-		recommendationKey = "mood_neutral_rec"
-		moodAdjustmentKey = "mood_normal"
-	case MoodLow:
-		recommendationKey = "mood_low_rec"
-		moodAdjustmentKey = "mood_low_adj"
-	case MoodTense:
-		recommendationKey = "mood_tense_rec"
-		moodAdjustmentKey = "mood_tense_adj"
-	}
-
-	return map[string]interface{}{
-		"mood":               string(mood),
-		"base_goal":          baseGoal,
-		"adjusted_goal":      totalGoal,
-		"mood_history_bonus": moodHistoryBonus,
-		"current_mood_bonus": currentMoodBonus,
-		"climate_bonus":      climateBonus,
-		"recommendation_key": recommendationKey,
-		"mood_adjustment_key": moodAdjustmentKey,
-	}
-}
-
-// GetDynamicGoal devuelve la meta dinámica actual con todos los factores
-func (a *App) GetDynamicGoal(temp int, humidity int) map[string]interface{} {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
-	baseGoal := a.settings.Weight * 35
-	if a.settings.Height > 150 {
-		baseGoal += ((a.settings.Height - 150) / 10) * 100
-	}
-
-	moodHistoryBonus := a.calculateMoodHistoryBonus()
-	currentMoodBonus := a.calculateCurrentMoodBonus()
-	climateBonus := a.calculateClimateBonus(temp, humidity)
-
-	totalGoal := baseGoal + moodHistoryBonus + currentMoodBonus + climateBonus
-
-	return map[string]interface{}{
-		"base_goal":          baseGoal,
-		"mood_history_bonus": moodHistoryBonus,
-		"current_mood_bonus": currentMoodBonus,
-		"climate_bonus":      climateBonus,
-		"total_goal":         totalGoal,
-		"consumed":           a.settings.TodayConsumed,
-		"percentage":         int(float64(a.settings.TodayConsumed) / float64(totalGoal) * 100),
-	}
-}
-
-func (a *App) SetWeight(weight int) Settings {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	a.settings.Weight = weight
-	a.settings.DailyGoal = a.calculateDailyGoal()
-	a.saveSettings()
-
-	return a.settings
-}
-
-// SetHeight establece la estatura y recalcula el objetivo
-func (a *App) SetHeight(height int) Settings {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	a.settings.Height = height
-	a.settings.DailyGoal = a.calculateDailyGoal()
-	a.saveSettings()
-
-	return a.settings
-}
-
-func (a *App) SetLanguage(language string) Settings {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	a.settings.Language = language
-	a.saveSettings()
-
-	return a.settings
-}
-
-func (a *App) SetLocation(location string) Settings {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	a.settings.Location = location
-	a.saveSettings()
-
-	return a.settings
-}
-
-func (a *App) SetReminderInterval(interval int) Settings {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	a.settings.ReminderInterval = interval
-	a.saveSettings()
-
-	return a.settings
-}
-
-func (a *App) GetWeeklyData() []HistoryDay {
-	return a.getHistoryData(7, true)
-}
-
-func (a *App) GetMonthlyData() []HistoryDay {
-	return a.getHistoryData(30, false)
-}
-
-func (a *App) getHistoryData(days int, useWeekday bool) []HistoryDay {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
-	result := make([]HistoryDay, 0, days)
-	now := time.Now()
-
-	for i := days - 1; i >= 0; i-- {
-		date := now.AddDate(0, 0, -i)
-		dateStr := date.Format("2006-01-02")
-
-		var dayStr string
-		if useWeekday {
-			dayStr = getWeekdayShort(date.Weekday())
-		} else {
-			dayStr = date.Format("02")
-		}
-
-		ml := a.history[dateStr]
-
-		result = append(result, HistoryDay{
-			Day:  dayStr,
-			Ml:   ml,
-			Date: dateStr,
-		})
-	}
-
-	return result
-}
-
-func getWeekdayShort(d time.Weekday) string {
-	switch d {
-	case time.Monday:
-		return "L"
-	case time.Tuesday:
-		return "M"
-	case time.Wednesday:
-		return "X"
-	case time.Thursday:
-		return "J"
-	case time.Friday:
-		return "V"
-	case time.Saturday:
-		return "S"
-	case time.Sunday:
-		return "D"
-	}
-	return "?"
-}
-
-func todayStr() string {
+func (h *HydrapotionApp) todayStr() string {
 	return time.Now().Format("2006-01-02")
 }
 
-// --- Persistence ---
-
-func getConfigDir() string {
-	configDir, err := os.UserConfigDir()
-	if err != nil {
-		configDir = "."
+func (h *HydrapotionApp) resetIfNewDay() {
+	today := h.todayStr()
+	if h.settings.LastResetDate != today {
+		h.settings.TodayConsumed = 0
+		h.settings.LastResetDate = today
+		h.settings.CurrentMood = MoodNeutral
+		h.saveSettings()
 	}
-	return filepath.Join(configDir, "hydrapotion")
 }
 
-func (a *App) saveSettings() {
-	dir := getConfigDir()
-	os.MkdirAll(dir, 0755)
+func (h *HydrapotionApp) CalculateGoal() int {
+	baseGoal := h.settings.Weight * 35
 
-	path := filepath.Join(dir, "settings.json")
-	data, _ := json.MarshalIndent(a.settings, "", " ")
-	os.WriteFile(path, data, 0644)
+	moodBonus := 0
+	switch h.settings.CurrentMood {
+	case MoodTense:
+		moodBonus = 400
+	case MoodLow:
+		moodBonus = 200
+	}
+
+	return baseGoal + moodBonus
 }
 
-func (a *App) saveHistory() {
-	dir := getConfigDir()
-	os.MkdirAll(dir, 0755)
+func (h *HydrapotionApp) AddWater(ml int) {
+	h.mu.Lock()
+	h.resetIfNewDay()
+	h.settings.TodayConsumed += ml
 
-	path := filepath.Join(dir, "history.json")
-	data, _ := json.MarshalIndent(a.history, "", " ")
-	os.WriteFile(path, data, 0644)
+	today := h.todayStr()
+	found := false
+	for i, entry := range h.history {
+		if entry.Date == today {
+			h.history[i].Ml += ml
+			found = true
+			break
+		}
+	}
+	if !found {
+		h.history = append(h.history, HistoryEntry{Date: today, Ml: ml})
+	}
+
+	h.saveSettings()
+	h.saveHistory()
+	h.mu.Unlock()
+
+	if h.onUpdate != nil {
+		h.onUpdate()
+	}
+
+	h.startReminderTimer()
 }
 
-func (a *App) saveMoodHistory() {
-	dir := getConfigDir()
-	os.MkdirAll(dir, 0755)
+func (h *HydrapotionApp) SetMood(mood Mood) {
+	h.mu.Lock()
+	h.settings.CurrentMood = mood
+	h.saveSettings()
+	h.mu.Unlock()
 
-	path := filepath.Join(dir, "mood_history.json")
-	data, _ := json.MarshalIndent(a.moodHistory, "", " ")
-	os.WriteFile(path, data, 0644)
+	if h.onUpdate != nil {
+		h.onUpdate()
+	}
 }
 
-func (a *App) loadSettings() {
-	dir := getConfigDir()
-	path := filepath.Join(dir, "settings.json")
+func (h *HydrapotionApp) SetWeight(weight int) {
+	h.mu.Lock()
+	h.settings.Weight = weight
+	h.saveSettings()
+	h.mu.Unlock()
 
-	data, err := os.ReadFile(path)
-	if err != nil {
+	if h.onUpdate != nil {
+		h.onUpdate()
+	}
+}
+
+func (h *HydrapotionApp) GetProgress() (consumed int, goal int, percent float64) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	h.resetIfNewDay()
+
+	consumed = h.settings.TodayConsumed
+	goal = h.CalculateGoal()
+	if goal > 0 {
+		percent = float64(consumed) / float64(goal) * 100
+		if percent > 100 {
+			percent = 100
+		}
+	}
+	return
+}
+
+func (h *HydrapotionApp) GetWeeklyData() []HistoryEntry {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	result := []HistoryEntry{}
+	now := time.Now()
+	for i := 6; i >= 0; i-- {
+		date := now.AddDate(0, 0, -i).Format("2006-01-02")
+		found := false
+		for _, entry := range h.history {
+			if entry.Date == date {
+				result = append(result, entry)
+				found = true
+				break
+			}
+		}
+		if !found {
+			result = append(result, HistoryEntry{Date: date, Ml: 0})
+		}
+	}
+	return result
+}
+
+func (h *HydrapotionApp) startReminderTimer() {
+	if h.reminder != nil {
+		h.reminder.Stop()
+	}
+
+	// 20 segundos para pruebas
+	duration := 20 * time.Second
+	h.reminder = time.AfterFunc(duration, func() {
+		h.showReminderPopup()
+	})
+}
+
+func (h *HydrapotionApp) showReminderPopup() {
+	// Notificacion del sistema
+	notifySend("Bebe Agua!", "Es hora de hidratarte!")
+
+	// Mostrar ventana popup
+	if h.reminderWin != nil {
+		h.reminderWin.Show()
+		h.reminderWin.RequestFocus()
 		return
 	}
 
-	json.Unmarshal(data, &a.settings)
+	// Crear ventana de recordatorio
+	h.reminderWin = h.app.NewWindow("Recordatorio")
+	h.reminderWin.Resize(fyne.NewSize(350, 400))
+
+	ui := h.CreateReminderUI()
+	h.reminderWin.SetContent(ui)
+	h.reminderWin.Show()
 }
 
-func (a *App) loadHistory() {
-	dir := getConfigDir()
-	path := filepath.Join(dir, "history.json")
+func (h *HydrapotionApp) CreateReminderUI() fyne.CanvasObject {
+	consumed, goal, percent := h.GetProgress()
 
-	data, err := os.ReadFile(path)
-	if err != nil {
+	// Titulo
+	title := widget.NewLabelWithStyle("Bebe Agua!", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
+	title.Importance = widget.HighImportance
+
+	// Progreso actual
+	progressText := widget.NewLabel(fmt.Sprintf("Hoy: %d / %d ml (%.0f%%)", consumed, goal, percent))
+	progressBar := widget.NewProgressBar()
+	progressBar.Min = 0
+	progressBar.Max = 100
+	progressBar.SetValue(percent)
+
+	// Botones para agregar agua
+	addWaterContainer := container.NewGridWithColumns(3,
+		widget.NewButton("150ml", func() {
+			h.AddWater(150)
+			h.closeReminderWindow()
+		}),
+		widget.NewButton("250ml", func() {
+			h.AddWater(250)
+			h.closeReminderWindow()
+		}),
+		widget.NewButton("500ml", func() {
+			h.AddWater(500)
+			h.closeReminderWindow()
+		}),
+	)
+
+	// Botones de posponer
+	snoozeContainer := container.NewGridWithColumns(3,
+		widget.NewButton("5 min", func() {
+			h.snoozeReminder(5)
+		}),
+		widget.NewButton("15 min", func() {
+			h.snoozeReminder(15)
+		}),
+		widget.NewButton("30 min", func() {
+			h.snoezeReminder(30)
+		}),
+	)
+
+	// Boton cerrar
+	closeBtn := widget.NewButton("Cerrar", func() {
+		h.closeReminderWindow()
+	})
+
+	return container.NewVBox(
+		title,
+		widget.NewSeparator(),
+		progressText,
+		progressBar,
+		widget.NewSeparator(),
+		widget.NewLabel("Agregar agua:"),
+		addWaterContainer,
+		widget.NewSeparator(),
+		widget.NewLabel("Posponer:"),
+		snoozeContainer,
+		layout.NewSpacer(),
+		closeBtn,
+	)
+}
+
+func (h *HydrapotionApp) snoozeReminder(minutes int) {
+	h.closeReminderWindow()
+	if h.reminder != nil {
+		h.reminder.Stop()
+	}
+	h.reminder = time.AfterFunc(time.Duration(minutes)*time.Minute, func() {
+		h.showReminderPopup()
+	})
+}
+
+func (h *HydrapotionApp) snoezeReminder(minutes int) {
+	h.snoozeReminder(minutes)
+}
+
+func (h *HydrapotionApp) closeReminderWindow() {
+	if h.reminderWin != nil {
+		h.reminderWin.Hide()
+	}
+}
+
+func notifySend(title, message string) {
+	cmd := exec.Command("notify-send", "-i", "water", title, message)
+	cmd.Run()
+}
+
+// --- Chart Widget ---
+
+type WaterChart struct {
+	widget.BaseWidget
+	data []HistoryEntry
+}
+
+func NewWaterChart(data []HistoryEntry) *WaterChart {
+	c := &WaterChart{data: data}
+	c.ExtendBaseWidget(c)
+	return c
+}
+
+func (c *WaterChart) CreateRenderer() fyne.WidgetRenderer {
+	return &waterChartRenderer{chart: c}
+}
+
+type waterChartRenderer struct {
+	chart *WaterChart
+	bars  []*canvas.Rectangle
+}
+
+func (r *waterChartRenderer) Layout(size fyne.Size) {
+	if len(r.chart.data) == 0 {
 		return
 	}
 
-	json.Unmarshal(data, &a.history)
-}
-
-func (a *App) loadMoodHistory() {
-	dir := getConfigDir()
-	path := filepath.Join(dir, "mood_history.json")
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return
+	maxMl := 0
+	for _, d := range r.chart.data {
+		if d.Ml > maxMl {
+			maxMl = d.Ml
+		}
+	}
+	if maxMl == 0 {
+		maxMl = 1
 	}
 
-	json.Unmarshal(data, &a.moodHistory)
+	barWidth := size.Width / float32(len(r.chart.data))
+	padding := float32(5)
+	maxHeight := size.Height - 40
+
+	for i, bar := range r.bars {
+		if i < len(r.chart.data) {
+			ml := r.chart.data[i].Ml
+			barHeight := float32(ml) / float32(maxMl) * maxHeight
+			if barHeight < 2 {
+				barHeight = 2
+			}
+
+			bar.Resize(fyne.NewSize(barWidth-padding*2, barHeight))
+			bar.Move(fyne.NewPos(
+				float32(i)*barWidth+padding,
+				size.Height-barHeight-20,
+			))
+		}
+	}
+}
+
+func (r *waterChartRenderer) MinSize() fyne.Size {
+	return fyne.NewSize(200, 100)
+}
+
+func (r *waterChartRenderer) Refresh() {
+	r.Layout(r.chart.Size())
+	canvas.Refresh(r.chart)
+}
+
+func (r *waterChartRenderer) Objects() []fyne.CanvasObject {
+	objs := make([]fyne.CanvasObject, len(r.bars))
+	for i, b := range r.bars {
+		objs[i] = b
+	}
+	return objs
+}
+
+func (r *waterChartRenderer) Destroy() {}
+
+// --- Main UI ---
+
+func (h *HydrapotionApp) CreateMainUI() fyne.CanvasObject {
+	// Header con titulo
+	title := widget.NewLabelWithStyle("Hydrapotion", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
+	title.Importance = widget.HighImportance
+
+	// Progreso
+	progressLabel := widget.NewLabel("0 / 0 ml (0%)")
+	progressBar := widget.NewProgressBar()
+	progressBar.Min = 0
+	progressBar.Max = 100
+
+	// Botones de agregar agua
+	addWaterContainer := container.NewGridWithColumns(3,
+		widget.NewButton("150ml", func() { h.AddWater(150) }),
+		widget.NewButton("250ml", func() { h.AddWater(250) }),
+		widget.NewButton("500ml", func() { h.AddWater(500) }),
+	)
+
+	// Selector de mood
+	moodLabel := widget.NewLabel("Estado mental:")
+	moodSelect := widget.NewSelect([]string{"Bien", "Neutral", "Bajo", "Tenso"}, func(s string) {
+		var m Mood
+		switch s {
+		case "Bien":
+			m = MoodWell
+		case "Neutral":
+			m = MoodNeutral
+		case "Bajo":
+			m = MoodLow
+		case "Tenso":
+			m = MoodTense
+		}
+		h.SetMood(m)
+	})
+	moodSelect.SetSelected(h.settings.CurrentMood.String())
+
+	// Settings
+	weightLabel := widget.NewLabel(fmt.Sprintf("Peso: %d kg", h.settings.Weight))
+	weightEntry := widget.NewEntry()
+	weightEntry.SetPlaceHolder("Peso en kg")
+	weightEntry.SetText(fmt.Sprintf("%d", h.settings.Weight))
+
+	saveWeightBtn := widget.NewButton("Guardar Peso", func() {
+		var w int
+		fmt.Sscanf(weightEntry.Text, "%d", &w)
+		if w > 0 {
+			h.SetWeight(w)
+			weightLabel.SetText(fmt.Sprintf("Peso: %d kg", w))
+		}
+	})
+
+	// Chart de historial
+	chartLabel := widget.NewLabel("Progreso semanal:")
+	chart := NewWaterChart(h.GetWeeklyData())
+
+	// Update callback
+	h.onUpdate = func() {
+		consumed, goal, percent := h.GetProgress()
+		progressLabel.SetText(fmt.Sprintf("%d / %d ml (%.0f%%)", consumed, goal, percent))
+		progressBar.SetValue(percent)
+		chart.data = h.GetWeeklyData()
+		chart.Refresh()
+	}
+
+	// Initial update
+	h.onUpdate()
+
+	// Layout principal
+	content := container.NewVBox(
+		title,
+		widget.NewSeparator(),
+		progressLabel,
+		progressBar,
+		widget.NewSeparator(),
+		widget.NewLabel("Agregar agua:"),
+		addWaterContainer,
+		widget.NewSeparator(),
+		moodLabel,
+		moodSelect,
+		widget.NewSeparator(),
+		weightLabel,
+		weightEntry,
+		saveWeightBtn,
+		widget.NewSeparator(),
+		chartLabel,
+		chart,
+	)
+
+	return container.NewPadded(content)
+}
+
+func (h *HydrapotionApp) setupSystemTray() {
+	if desk, ok := h.app.(desktop.App); ok {
+		// Menu del system tray
+		menu := fyne.NewMenu("Hydrapotion",
+			fyne.NewMenuItem("Agregar 150ml", func() { h.AddWater(150) }),
+			fyne.NewMenuItem("Agregar 250ml", func() { h.AddWater(250) }),
+			fyne.NewMenuItem("Agregar 500ml", func() { h.AddWater(500) }),
+			fyne.NewMenuItemSeparator(),
+			fyne.NewMenuItem("Mostrar ventana", func() {
+				if h.mainWindow != nil {
+					h.mainWindow.Show()
+					h.mainWindow.RequestFocus()
+				}
+			}),
+			fyne.NewMenuItem("Salir", func() {
+				h.app.Quit()
+			}),
+		)
+		desk.SetSystemTrayMenu(menu)
+	}
+}
+
+func main() {
+	a := app.NewWithID("hydrapotion")
+	w := a.NewWindow("Hydrapotion")
+
+	// Tema oscuro
+	a.Settings().SetTheme(theme.DarkTheme())
+
+	h := NewHydrapotionApp(a)
+	h.mainWindow = w
+
+	// Setup system tray
+	h.setupSystemTray()
+
+	// UI principal
+	ui := h.CreateMainUI()
+	w.SetContent(ui)
+	w.Resize(fyne.NewSize(400, 550))
+
+	// Cuando cierra la ventana principal, ocultar en vez de salir
+	w.SetCloseIntercept(func() {
+		w.Hide()
+	})
+
+	// Iniciar timer de recordatorio
+	h.startReminderTimer()
+
+	w.ShowAndRun()
 }

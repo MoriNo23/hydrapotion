@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react';
 import { Events } from '@wailsio/runtime';
 import { 
- GetSettings, AddWater, SetWeight, SetHeight, SetLanguage, SetLocation, 
+ GetSettings, AddWater, SetWeight, SetLanguage, SetLocation, 
  SetReminderInterval, GetWeeklyData, GetMonthlyData, SetMood, 
  GetMoodRecommendation 
-} from '../bindings/hydrapotion/app';
-import { Settings, HistoryDay, MoodEntry, Mood } from '../bindings/hydrapotion/models';
+} from '../wailsjs/go/main/App';
+import { Settings, HistoryDay, MoodEntry, Mood } from '../wailsjs/go/models';
 import ReminderModal from './ReminderModal';
 import './App.css';
+
+// Detectar si es ventana popup
+const isPopup = new URLSearchParams(window.location.search).get('popup') === 'true';
 
 interface DynamicGoal {
  base_goal: number;
@@ -200,15 +203,18 @@ function App() {
     };
   }, [settings.reminder_interval]);
 
-  useEffect(() => {
-    loadSettings();
-    loadHistory();
+useEffect(() => {
+ loadSettings();
+ loadHistory();
 
-    Events.On('show-reminder', (data: { consumed: number; goal: number }) => {
-      setReminderData(data);
-      setShowReminder(true);
-    });
-  }, []);
+ console.log('[DEBUG] Registrando evento show-reminder');
+ Events.On('show-reminder', (data: { consumed: number; goal: number }) => {
+ console.log('[DEBUG] Evento show-reminder recibido:', data);
+ setReminderData(data);
+ setShowReminder(true);
+ console.log('[DEBUG] showReminder set to true');
+ });
+ }, []);
 
  useEffect(() => {
  if (settings.location && !location) {
@@ -419,10 +425,30 @@ function App() {
   const maxMl = Math.max(...historyData.map(d => d.ml), goal);
   const totalMl = historyData.reduce((sum, d) => sum + d.ml, 0);
   const avgMl = historyData.length > 0 ? Math.round(totalMl / historyData.length) : 0;
-  const goalsMet = historyData.filter(d => d.ml >= goal).length;
-  const bestDay = historyData.length > 0 ? Math.max(...historyData.map(d => d.ml)) : 0;
+ const goalsMet = historyData.filter(d => d.ml >= goal).length;
+ const bestDay = historyData.length > 0 ? Math.max(...historyData.map(d => d.ml)) : 0;
 
-  return (
+ // si es ventana popup, solo mostrar el modal
+ if (isPopup) {
+ return (
+ <div className="app-container" data-theme="dark" style={{ 
+ width: '100vw', 
+ height: '100vh', 
+ display: 'flex', 
+ alignItems: 'center', 
+ justifyContent: 'center',
+ background: 'linear-gradient(135deg, #0b1720 0%, #1a2f40 100%)'
+ }}>
+ <ReminderModal
+ consumed={settings.today_consumed}
+ goal={goal}
+ onClose={() => window.close()}
+ />
+ </div>
+ );
+ }
+
+ return (
     <div className="app-container" data-theme={theme}>
  {/* Sidebar */}
  <aside className="sidebar">
@@ -881,16 +907,12 @@ function App() {
 
       {/* Reminder Modal */}
       {showReminder && reminderData && (
-        <ReminderModal
-          consumed={reminderData.consumed}
-          goal={reminderData.goal}
-          onClose={() => setShowReminder(false)}
-          onAdd={() => {
-            loadSettings();
-            loadHistory();
-          }}
-        />
-      )}
+ <ReminderModal
+ consumed={reminderData.consumed}
+ goal={reminderData.goal}
+ onClose={() => setShowReminder(false)}
+ />
+ )}
     </div>
   );
 }

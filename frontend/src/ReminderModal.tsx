@@ -1,76 +1,75 @@
 import { useState, useEffect } from 'react';
-import { AddWater, SnoozeReminder, DismissReminder } from '../bindings/hydrapotion/app';
+import { AddWater, SnoozeReminder, DismissReminder, GetSettings } from '../wailsjs/go/main/App';
 
 interface ReminderModalProps {
-  consumed: number;
-  goal: number;
-  onClose: () => void;
-  onAdd: () => void;
+ consumed: number;
+ goal: number;
+ onClose: () => void;
 }
 
 const translations = {
-  es: {
-    title: "HORA DE BEBER AGUA",
-    subtitle: "Han pasado",
-    progress: "Progreso actual",
-    snooze: "Posponer",
-    dismiss: "Descartar",
-    minutes: "min",
-  },
-  en: {
-    title: "TIME TO DRINK WATER",
-    subtitle: "It's been",
-    progress: "Current progress",
-    snooze: "Snooze",
-    dismiss: "Dismiss",
-    minutes: "min",
-  },
+ es: {
+ title: "HORA DE BEBER AGUA",
+ progress: "Progreso actual",
+ snooze: "Posponer",
+ dismiss: "Descartar",
+ minutes: "min",
+ },
+ en: {
+ title: "TIME TO DRINK WATER",
+ progress: "Current progress",
+ snooze: "Snooze",
+ dismiss: "Dismiss",
+ minutes: "min",
+ },
 };
 
-function ReminderModal({ consumed, goal, onClose, onAdd }: ReminderModalProps) {
-  const [visible, setVisible] = useState(false);
-  const [lang, setLang] = useState<'es' | 'en'>('es');
+function ReminderModal({ consumed, goal, onClose }: ReminderModalProps) {
+ const [visible, setVisible] = useState(false);
+ const [lang, setLang] = useState<'es' | 'en'>('es');
+ const [currentConsumed, setCurrentConsumed] = useState(consumed);
 
-  useEffect(() => {
-    // Detectar idioma del sistema
-    const userLang = navigator.language.startsWith('es') ? 'es' : 'en';
-    setLang(userLang as 'es' | 'en');
-    // Animacion de entrada
-    setTimeout(() => setVisible(true), 50);
-  }, []);
+ useEffect(() => {
+ const userLang = navigator.language.startsWith('es') ? 'es' : 'en';
+ setLang(userLang as 'es' | 'en');
+ setTimeout(() => setVisible(true), 50);
+ }, []);
 
-  const t = translations[lang];
-  const progress = Math.min(100, (consumed / goal) * 100);
-  const segmentsFilled = Math.min(10, Math.floor((consumed / goal) * 10));
+ const t = translations[lang];
+ const progress = Math.min(100, (currentConsumed / goal) * 100);
+ const segmentsFilled = Math.min(10, Math.floor((currentConsumed / goal) * 10));
 
-  const handleAdd = async (ml: number) => {
-    try {
-      await AddWater(ml);
-      await DismissReminder();
-      onAdd();
-      onClose();
-    } catch (e) {
-      console.error('Error adding water:', e);
-    }
-  };
+ const handleAdd = async (ml: number) => {
+ try {
+ await AddWater(ml);
+ await DismissReminder();
+ // Leer estado actualizado
+ const settings = await GetSettings();
+ setCurrentConsumed(settings.today_consumed);
+ // Cerrar despues de mostrar el nuevo valor
+ setTimeout(() => onClose(), 500);
+ } catch (e) {
+ console.error('Error:', e);
+ }
+ };
 
-  const handleSnooze = async (minutes: number) => {
-    try {
-      await SnoozeReminder(minutes);
-      onClose();
-    } catch (e) {
-      console.error('Error snoozing:', e);
-    }
-  };
+ const handleSnooze = async (minutes: number) => {
+ try {
+ await SnoozeReminder(minutes);
+ onClose();
+ } catch (e) {
+ console.error('Error:', e);
+ }
+ };
 
-  const handleDismiss = async () => {
-    try {
-      await DismissReminder();
-      onClose();
-    } catch (e) {
-      console.error('Error dismissing:', e);
-    }
-  };
+ const handleDismiss = async () => {
+ try {
+ await DismissReminder();
+ onClose();
+ } catch (e) {
+ console.error('Error:', e);
+ }
+ };
 
   return (
     <div className={`modal-overlay ${visible ? 'visible' : ''}`}>

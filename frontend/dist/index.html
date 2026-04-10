@@ -5,10 +5,24 @@
     <link rel="icon" type="image/svg+xml" href="/logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Hydrapotion</title>
-    <script type="module" crossorigin src="/assets/index-vGp10_Hk.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-CLF8lWDV.css">
+    <script type="module" crossorigin src="/assets/index-D9_1DilT.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CMgndLJq.css">
   </head>
-  <body>
-    <div id="root"></div>
-  </body>
+<body>
+ <div id="root"></div>
+ <!-- Wails runtime scripts - deben cargarse antes que los bindings -->
+ <script>
+ // Asegurar que window.go existe antes de que carguen los bindings
+ (function() {
+ if (!window.go) {
+ // Crear namespace basico para bindings
+ window.go = window.go || {};
+ window.go.main = window.go.main || {};
+ window.go.main.App = window.go.main.App || {};
+ }
+ })();
+ </script>
+ <script src="/wails/ipc.js"></script>
+ <script src="/wails/runtime.js"></script>
+ </body>
 </html>
