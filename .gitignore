@@ -1,0 +1,29 @@
+# Binarios compilados
+build/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Dependencias de Node
+frontend/node_modules/
+
+# Archivos de desarrollo
+*.log
+*.swp
+*.swo
+*~
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Archivos de sistema
+.DS_Store
+Thumbs.db
+
+# Archivos temporales
+tmp/
+temp/
