@@ -183,21 +183,109 @@ func NewApp() *App {
 	return a
 }
 
-// calculateDailyGoal calcula el objetivo diario basado en peso Y estatura
+// calculateDailyGoal calcula el objetivo diario basado en peso, estatura, mood histórico y clima
 func (a *App) calculateDailyGoal() int {
+	return a.calculateDailyGoalWithFactors(0, 0)
+}
+
+// calculateDailyGoalWithFactors calcula la meta con factores externos
+// temp: temperatura en °C, humidity: porcentaje de humedad (0-100)
+func (a *App) calculateDailyGoalWithFactors(temp int, humidity int) int {
 	weight := a.settings.Weight
 	height := a.settings.Height
 
-	// Formula: 35ml por kg + ajuste por estatura
-	// Por cada 10cm arriba de 150cm, agregar 100ml extra
+	// 1. BASE: 35ml/kg + ajuste por estatura
 	baseGoal := weight * 35
-
-	heightAdjustment := 0
 	if height > 150 {
-		heightAdjustment = ((height - 150) / 10) * 100
+		baseGoal += ((height - 150) / 10) * 100
 	}
 
-	return baseGoal + heightAdjustment
+	// 2. BONIFICACIÓN POR MOOD HISTÓRICO (últimos 7 días)
+	moodBonus := a.calculateMoodHistoryBonus()
+
+	// 3. BONIFICACIÓN POR MOOD ACTUAL
+	currentMoodBonus := a.calculateCurrentMoodBonus()
+
+	// 4. BONIFICACIÓN POR CLIMA
+	climateBonus := a.calculateClimateBonus(temp, humidity)
+
+	totalGoal := baseGoal + moodBonus + currentMoodBonus + climateBonus
+
+	return totalGoal
+}
+
+// calculateMoodHistoryBonus calcula bonus basado en últimos 7 días de mood
+func (a *App) calculateMoodHistoryBonus() int {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	// Contar días negativos en últimos 7 días
+	negativeDays := 0
+	sevenDaysAgo := time.Now().AddDate(0, 0, -7)
+
+	for _, entry := range a.moodHistory {
+		entryDate, err := time.Parse("2006-01-02", entry.Date)
+		if err != nil {
+			continue
+		}
+		if entryDate.After(sevenDaysAgo) && (entry.Mood == MoodLow || entry.Mood == MoodTense) {
+			negativeDays++
+		}
+	}
+
+	// Rangos conservadores basados en literatura de cortisol
+	switch negativeDays {
+	case 0, 1, 2:
+		return 0 // Fluctuación normal
+	case 3, 4:
+		return 150 // Estrés leve
+	case 5, 6:
+		return 300 // Estrés moderado
+	default: // 7 días
+		return 450 // Estrés crónico
+	}
+}
+
+// calculateCurrentMoodBonus calcula bonus por mood del día actual
+func (a *App) calculateCurrentMoodBonus() int {
+	switch a.settings.CurrentMood {
+	case MoodWell:
+		return 0
+	case MoodNeutral:
+		return 0
+	case MoodLow:
+		return 100 // Apetito reducido = menos agua de alimentos
+	case MoodTense:
+		return 150 // Cortisol elevado = mayor pérdida
+	default:
+		return 0
+	}
+}
+
+// calculateClimateBonus calcula bonus por temperatura y humedad
+func (a *App) calculateClimateBonus(temp int, humidity int) int {
+	bonus := 0
+
+	// Por temperatura (American College of Sports Medicine)
+	switch {
+	case temp < 20:
+		bonus += 0
+	case temp >= 20 && temp < 25:
+		bonus += 200 // Ligera pérdida por respiración
+	case temp >= 25 && temp < 30:
+		bonus += 400 // Sudoración moderada
+	case temp >= 30 && temp < 35:
+		bonus += 600 // Sudoración activa
+	case temp >= 35:
+		bonus += 800 // Alto riesgo
+	}
+
+	// Por humedad alta
+	if humidity > 70 {
+		bonus += 200 // Dificulta evaporación del sudor
+	}
+
+	return bonus
 }
 
 // Startup llamado cuando la app inicia
@@ -336,46 +424,74 @@ func (a *App) GetMoodRecommendation(temp int) map[string]interface{} {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 
-	baseGoal := a.settings.DailyGoal
 	mood := a.settings.CurrentMood
+	baseGoal := a.settings.Weight * 35
+	if a.settings.Height > 150 {
+		baseGoal += ((a.settings.Height - 150) / 10) * 100
+	}
 
-	multiplier := 1.0
+	// Calcular bonificaciones individuales
+	moodHistoryBonus := a.calculateMoodHistoryBonus()
+	currentMoodBonus := a.calculateCurrentMoodBonus()
+	climateBonus := a.calculateClimateBonus(temp, 0)
+
+	totalGoal := baseGoal + moodHistoryBonus + currentMoodBonus + climateBonus
+
+	// Mensaje personalizado
 	var recommendation string
-	var adjustment string
+	var moodAdjustment string
 
 	switch mood {
 	case MoodWell:
-		multiplier = 1.0
-		recommendation = "Genial! Sigue asi"
-		adjustment = "Normal"
+		recommendation = "¡Genial! Sigue así"
+		moodAdjustment = "Normal"
 	case MoodNeutral:
-		multiplier = 1.0
 		recommendation = "Mantente hidratado"
-		adjustment = "Normal"
+		moodAdjustment = "Normal"
 	case MoodLow:
-		multiplier = 1.1
-		recommendation = "El agua ayuda a mejorar el animo"
-		adjustment = "+10% recomendado"
+		recommendation = "El agua ayuda a mejorar el ánimo"
+		moodAdjustment = "+100ml por mood"
 	case MoodTense:
-		multiplier = 1.15
-		recommendation = "El estres deshidrata, bebe mas"
-		adjustment = "+15% recomendado"
+		recommendation = "El estrés deshidrata, bebe más"
+		moodAdjustment = "+150ml por mood"
 	}
-
-	if temp >= 30 {
-		multiplier += 0.1
-		adjustment = "Extra por calor"
-	}
-
-	adjustedGoal := int(float64(baseGoal) * multiplier)
 
 	return map[string]interface{}{
-		"mood":          string(mood),
-		"base_goal":     baseGoal,
-		"adjusted_goal": adjustedGoal,
-		"recommendation": recommendation,
-		"adjustment":    adjustment,
-		"multiplier":    multiplier,
+		"mood":               string(mood),
+		"base_goal":          baseGoal,
+		"adjusted_goal":      totalGoal,
+		"mood_history_bonus": moodHistoryBonus,
+		"current_mood_bonus": currentMoodBonus,
+		"climate_bonus":      climateBonus,
+		"recommendation":     recommendation,
+		"mood_adjustment":    moodAdjustment,
+	}
+}
+
+// GetDynamicGoal devuelve la meta dinámica actual con todos los factores
+func (a *App) GetDynamicGoal(temp int, humidity int) map[string]interface{} {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	baseGoal := a.settings.Weight * 35
+	if a.settings.Height > 150 {
+		baseGoal += ((a.settings.Height - 150) / 10) * 100
+	}
+
+	moodHistoryBonus := a.calculateMoodHistoryBonus()
+	currentMoodBonus := a.calculateCurrentMoodBonus()
+	climateBonus := a.calculateClimateBonus(temp, humidity)
+
+	totalGoal := baseGoal + moodHistoryBonus + currentMoodBonus + climateBonus
+
+	return map[string]interface{}{
+		"base_goal":          baseGoal,
+		"mood_history_bonus": moodHistoryBonus,
+		"current_mood_bonus": currentMoodBonus,
+		"climate_bonus":      climateBonus,
+		"total_goal":         totalGoal,
+		"consumed":           a.settings.TodayConsumed,
+		"percentage":         int(float64(a.settings.TodayConsumed) / float64(totalGoal) * 100),
 	}
 }
 
