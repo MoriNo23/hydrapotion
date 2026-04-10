@@ -26,8 +26,8 @@ interface MoodRecommendation {
  mood_history_bonus: number;
  current_mood_bonus: number;
  climate_bonus: number;
- recommendation: string;
- mood_adjustment: string;
+ recommendation_key: string;
+ mood_adjustment_key: string;
 }
 
 const translations = {
@@ -71,6 +71,13 @@ const translations = {
  climate: "Clima",
  dynamic_goal: "Meta dinamica",
  breakdown: "Desglose",
+ mood_well_rec: "¡Genial! Sigue así",
+ mood_neutral_rec: "Mantente hidratado",
+ mood_low_rec: "El agua ayuda a mejorar el ánimo",
+ mood_tense_rec: "El estrés deshidrata, bebe más",
+ mood_normal: "Normal",
+ mood_low_adj: "+100ml por mood",
+ mood_tense_adj: "+150ml por mood",
  },
  en: {
  app_name: "Hydrapotion",
@@ -112,6 +119,13 @@ const translations = {
  climate: "Climate",
  dynamic_goal: "Dynamic goal",
  breakdown: "Breakdown",
+ mood_well_rec: "Great! Keep it up",
+ mood_neutral_rec: "Stay hydrated",
+ mood_low_rec: "Water helps improve your mood",
+ mood_tense_rec: "Stress dehydrates, drink more",
+ mood_normal: "Normal",
+ mood_low_adj: "+100ml for mood",
+ mood_tense_adj: "+150ml for mood",
  },
 };
 
@@ -515,7 +529,7 @@ function App() {
               
  {moodRec && (
  <div className="mood-recommendation">
- <span className="mood-rec-text">{moodRec.recommendation}</span>
+ <span className="mood-rec-text">{t[moodRec.recommendation_key as keyof typeof t]}</span>
  {(moodRec.mood_history_bonus > 0 || moodRec.current_mood_bonus > 0 || moodRec.climate_bonus > 0) && (
  <div className="mood-breakdown">
  <div className="breakdown-row">

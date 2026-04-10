@@ -437,23 +437,24 @@ func (a *App) GetMoodRecommendation(temp int) map[string]interface{} {
 
 	totalGoal := baseGoal + moodHistoryBonus + currentMoodBonus + climateBonus
 
-	// Mensaje personalizado
-	var recommendation string
-	var moodAdjustment string
+	// Devolver códigos, no textos hardcodeados
+	// El frontend se encarga de traducir
+	var recommendationKey string
+	var moodAdjustmentKey string
 
 	switch mood {
 	case MoodWell:
-		recommendation = "¡Genial! Sigue así"
-		moodAdjustment = "Normal"
+		recommendationKey = "mood_well_rec"
+		moodAdjustmentKey = "mood_normal"
 	case MoodNeutral:
-		recommendation = "Mantente hidratado"
-		moodAdjustment = "Normal"
+		recommendationKey = "mood_neutral_rec"
+		moodAdjustmentKey = "mood_normal"
 	case MoodLow:
-		recommendation = "El agua ayuda a mejorar el ánimo"
-		moodAdjustment = "+100ml por mood"
+		recommendationKey = "mood_low_rec"
+		moodAdjustmentKey = "mood_low_adj"
 	case MoodTense:
-		recommendation = "El estrés deshidrata, bebe más"
-		moodAdjustment = "+150ml por mood"
+		recommendationKey = "mood_tense_rec"
+		moodAdjustmentKey = "mood_tense_adj"
 	}
 
 	return map[string]interface{}{
@@ -463,8 +464,8 @@ func (a *App) GetMoodRecommendation(temp int) map[string]interface{} {
 		"mood_history_bonus": moodHistoryBonus,
 		"current_mood_bonus": currentMoodBonus,
 		"climate_bonus":      climateBonus,
-		"recommendation":     recommendation,
-		"mood_adjustment":    moodAdjustment,
+		"recommendation_key": recommendationKey,
+		"mood_adjustment_key": moodAdjustmentKey,
 	}
 }
 
