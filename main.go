@@ -3,10 +3,12 @@ package main
 import (
  "embed"
  "encoding/json"
+ "fmt"
  "log"
  "os"
  "path/filepath"
  "sync"
+ "syscall"
  "time"
 
  "github.com/wailsapp/wails/v3/pkg/application"
@@ -69,26 +71,43 @@ type App struct {
 }
 
 func main() {
-	// Crear aplicacion
-	app := application.New(application.Options{
-		Name:        "Hydrapotion",
-		Description: "Desktop hydration tracker",
-		Services: []application.Service{
-			application.NewService(NewApp()),
-		},
-		Assets: application.AssetOptions{
-			Handler: application.AssetFileServerFS(assets),
-		},
-	})
+ // Single instance - lock file
+ lockFile := "/tmp/hydrapotion.lock"
+ lock, err := os.Create(lockFile)
+ if err != nil {
+ fmt.Println("Hydrapotion ya esta ejecutandose")
+ return
+ }
+ err = syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+ if err != nil {
+ fmt.Println("Hydrapotion ya esta ejecutandose")
+ return
+ }
+ defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
+ defer os.Remove(lockFile)
+
+ // Crear aplicacion - UNA sola instancia
+ appService := NewApp()
+
+ app := application.New(application.Options{
+ Name: "Hydrapotion",
+ Description: "Desktop hydration tracker",
+ Services: []application.Service{
+ application.NewService(appService),
+ },
+ Assets: application.AssetOptions{
+ Handler: application.AssetFileServerFS(assets),
+ },
+ })
 
  // Crear ventana principal
  window := app.Window.NewWithOptions(application.WebviewWindowOptions{
- Title:            "Hydrapotion",
- Width:            340,
- Height:           760,
+ Title: "Hydrapotion",
+ Width: 340,
+ Height: 760,
  BackgroundColour: application.NewRGB(11, 23, 32),
- URL:              "/",
- Hidden:           false,
+ URL: "/",
+ Hidden: false,
  })
 
  // Maximizar la ventana al iniciar
@@ -101,7 +120,6 @@ func main() {
  })
 
  // Guardar referencia a la ventana
- appService := NewApp()
  appService.window = window
 
  // Crear system tray
@@ -148,15 +166,14 @@ func main() {
  // No hacemos nada mas para evitar mostrar la ventana
  })
 
-	appService.systray = systray
+ appService.systray = systray
 
-	// Registrar eventos
-	application.RegisterEvent[map[string]interface{}]("show-reminder")
+ // Registrar eventos
+ application.RegisterEvent[map[string]interface{}]("show-reminder")
 
-	err := app.Run()
-	if err != nil {
-		log.Fatal(err)
-	}
+ if err := app.Run(); err != nil {
+ log.Fatal(err)
+ }
 }
 
 // NewApp crea una nueva instancia del servicio App
