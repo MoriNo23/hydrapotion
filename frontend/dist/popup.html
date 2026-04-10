@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hydrapotion - Reminder</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #0A192F 0%, #112240 100%);
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    
+    .popup-container { width: 100%; max-width: 300px; text-align: center; }
+    
+    .water-icon {
+      width: 70px;
+      height: 70px;
+      margin: 0 auto 16px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    
+    .water-icon svg {
+      width: 100%;
+      height: 100%;
+      fill: #00E5FF;
+      filter: drop-shadow(0 0 15px rgba(0, 229, 255, 0.5));
+    }
+    
+    @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+    
+    .title {
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      margin-bottom: 6px;
+      color: #00E5FF;
+    }
+    
+    .progress-text { font-size: 12px; color: #94a3b8; margin-bottom: 12px; }
+    
+    .progress-bar {
+      width: 100%;
+      height: 6px;
+      background: rgba(0, 229, 255, 0.1);
+      border-radius: 3px;
+      margin-bottom: 8px;
+      overflow: hidden;
+    }
+    
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #00E5FF, #329FFF);
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+    
+    .progress-info { font-size: 12px; color: #64748b; margin-bottom: 20px; }
+    
+    .add-buttons { display: flex; gap: 8px; justify-content: center; margin-bottom: 16px; }
+    
+    .add-btn {
+      flex: 1;
+      padding: 12px 6px;
+      background: rgba(0, 229, 255, 0.1);
+      border: 1px solid rgba(0, 229, 255, 0.3);
+      border-radius: 10px;
+      color: #00E5FF;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .add-btn:hover { background: rgba(0, 229, 255, 0.2); border-color: #00E5FF; }
+    
+    .add-btn.primary {
+      background: linear-gradient(135deg, #00E5FF, #329FFF);
+      border: none;
+      color: #0A192F;
+      font-weight: 600;
+    }
+    
+    .add-ml { display: block; font-size: 16px; font-weight: 600; }
+    .add-unit { font-size: 10px; opacity: 0.8; }
+    
+    .action-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    
+    .snooze-options { display: flex; gap: 5px; }
+    
+    .snooze-btn {
+      padding: 6px 10px;
+      background: transparent;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      border-radius: 6px;
+      color: #94a3b8;
+      font-size: 10px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .snooze-btn:hover { border-color: #94a3b8; color: #e2e8f0; }
+    
+    .dismiss-btn {
+      padding: 6px 12px;
+      background: transparent;
+      border: 1px solid rgba(248, 113, 113, 0.3);
+      border-radius: 6px;
+      color: #f87171;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .dismiss-btn:hover { border-color: #f87171; background: rgba(248, 113, 113, 0.1); }
+  </style>
+</head>
+<body>
+  <div class="popup-container">
+    <div class="water-icon">
+      <svg viewBox="0 0 24 24">
+        <path d="M12 2C12 2 5 10 5 15C5 18.866 8.134 22 12 22C15.866 22 19 18.866 19 15C19 10 12 2 12 2ZM12 20C9.243 20 7 17.757 7 15C7 12.27 10.076 7.476 12 4.642C13.924 7.476 17 12.27 17 15C17 17.757 14.757 20 12 20Z"/>
+      </svg>
+    </div>
+    
+    <div class="title">TIME TO DRINK WATER</div>
+    <div class="progress-text">Current progress</div>
+    
+    <div class="progress-bar">
+      <div class="progress-fill" id="progressFill" style="width: 30%"></div>
+    </div>
+    <div class="progress-info">
+      <span id="consumedText">0.5L</span> / <span id="goalText">2.5L</span>
+    </div>
+    
+    <div class="add-buttons">
+      <button class="add-btn" onclick="addWater(150)">
+        <span class="add-ml">150</span>
+        <span class="add-unit">ml</span>
+      </button>
+      <button class="add-btn primary" onclick="addWater(250)">
+        <span class="add-ml">250</span>
+        <span class="add-unit">ml</span>
+      </button>
+      <button class="add-btn" onclick="addWater(500)">
+        <span class="add-ml">500</span>
+        <span class="add-unit">ml</span>
+      </button>
+    </div>
+    
+    <div class="action-row">
+      <div class="snooze-options">
+        <button class="snooze-btn" onclick="snooze(5)">5 min</button>
+        <button class="snooze-btn" onclick="snooze(15)">15 min</button>
+        <button class="snooze-btn" onclick="snooze(30)">30 min</button>
+      </div>
+      <button class="dismiss-btn" onclick="dismiss()">Dismiss</button>
+    </div>
+  </div>
+  
+  <script type="module">
+    import { EventsOn, EventsEmit } from '/wails/ipc.js';
+    
+    EventsOn('popup-data', (data) => {
+      document.getElementById('consumedText').textContent = (data.consumed / 1000).toFixed(1) + 'L';
+      document.getElementById('goalText').textContent = (data.goal / 1000).toFixed(1) + 'L';
+      const progress = Math.min(100, (data.consumed / data.goal) * 100);
+      document.getElementById('progressFill').style.width = progress + '%';
+    });
+    
+    window.addWater = (ml) => {
+      EventsEmit('popup-add-water', ml);
+      EventsEmit('close-popup');
+    };
+    
+    window.snooze = (minutes) => {
+      EventsEmit('popup-snooze', minutes);
+      EventsEmit('close-popup');
+    };
+    
+    window.dismiss = () => {
+      EventsEmit('popup-dismiss');
+      EventsEmit('close-popup');
+    };
+  </script>
+</body>
+</html>

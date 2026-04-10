@@ -1,21 +1,16 @@
 package main
 
 import (
-	"context"
-	"embed"
-	"encoding/json"
-	"os"
-	"path/filepath"
-	"sync"
-	"time"
+ "embed"
+ "encoding/json"
+ "log"
+ "os"
+ "path/filepath"
+ "sync"
+ "time"
 
-	"github.com/energye/systray"
-	"github.com/wailsapp/wails/v2"
-	"github.com/wailsapp/wails/v2/pkg/options"
-	"github.com/wailsapp/wails/v2/pkg/options/linux"
-	"github.com/wailsapp/wails/v2/pkg/options/mac"
-	"github.com/wailsapp/wails/v2/pkg/options/windows"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+ "github.com/wailsapp/wails/v3/pkg/application"
+ "github.com/wailsapp/wails/v3/pkg/events"
 )
 
 //go:embed all:frontend/dist
@@ -28,57 +23,148 @@ var iconData []byte
 type Mood string
 
 const (
-	MoodWell   Mood = "well"   // Bien - contento, tranquilo, feliz
-	MoodNeutral Mood = "neutral" // Neutral - ni bien ni mal, normal
-	MoodLow    Mood = "low"    // Bajo - triste, deprimido, melancolico
-	MoodTense  Mood = "tense"  // Tenso - estresado, ansioso, frustrado
+	MoodWell    Mood = "well"
+	MoodNeutral Mood = "neutral"
+	MoodLow     Mood = "low"
+	MoodTense   Mood = "tense"
 )
 
 // Settings estructura principal
 type Settings struct {
-	Weight           int    `json:"weight"`
-	TodayConsumed    int    `json:"today_consumed"`
-	DailyGoal        int    `json:"daily_goal"`
-	Language         string `json:"language"`
-	Location         string `json:"location"`
-	LastResetDate    string `json:"last_reset_date"`
-	ReminderInterval int    `json:"reminder_interval"`
-	CurrentMood      Mood   `json:"current_mood"`
+	Weight          int    `json:"weight"`
+	Height          int    `json:"height"`           // Estatura en cm
+	TodayConsumed   int    `json:"today_consumed"`
+	DailyGoal       int    `json:"daily_goal"`
+	Language        string `json:"language"`
+	Location        string `json:"location"`
+	LastResetDate   string `json:"last_reset_date"`
+	ReminderInterval int   `json:"reminder_interval"`
+	CurrentMood      Mood  `json:"current_mood"`
 }
 
 // HistoryDay entrada de historial
 type HistoryDay struct {
-	Day  string `json:"day"`
-	Ml   int    `json:"ml"`
-	Date string `json:"date"`
+	Day   string `json:"day"`
+	Ml    int    `json:"ml"`
+	Date  string `json:"date"`
 }
 
 // MoodEntry registro de mood
 type MoodEntry struct {
 	Date string `json:"date"`
 	Mood Mood   `json:"mood"`
-	Ml   int    `json:"ml"` // agua consumida en ese momento
+	Ml   int    `json:"ml"`
 }
 
-// App estado de la aplicacion
+// App servicio principal de la aplicacion
 type App struct {
-	settings        Settings
-	history         map[string]int
-	moodHistory     []MoodEntry
-	mu              sync.RWMutex
-	ctx             context.Context
-	shouldClose     bool
-	reminderTimer   *time.Timer
-	lastIntakeTime  time.Time
-	reminderActive  bool
+	settings      Settings
+	history       map[string]int
+	moodHistory   []MoodEntry
+	mu            sync.RWMutex
+	reminderTimer *time.Timer
+	lastIntakeTime time.Time
+	window        *application.WebviewWindow
+	systray       *application.SystemTray
 }
-
-var appInstance *App
 
 func main() {
-	appInstance = &App{
+	// Crear aplicacion
+	app := application.New(application.Options{
+		Name:        "Hydrapotion",
+		Description: "Desktop hydration tracker",
+		Services: []application.Service{
+			application.NewService(NewApp()),
+		},
+		Assets: application.AssetOptions{
+			Handler: application.AssetFileServerFS(assets),
+		},
+	})
+
+ // Crear ventana principal
+ window := app.Window.NewWithOptions(application.WebviewWindowOptions{
+ Title:            "Hydrapotion",
+ Width:            340,
+ Height:           760,
+ BackgroundColour: application.NewRGB(11, 23, 32),
+ URL:              "/",
+ Hidden:           false,
+ })
+
+ // Maximizar la ventana al iniciar
+ window.Maximise()
+
+ // Ocultar en lugar de cerrar usando RegisterHook
+ window.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
+ e.Cancel()
+ window.Hide()
+ })
+
+ // Guardar referencia a la ventana
+ appService := NewApp()
+ appService.window = window
+
+ // Crear system tray
+ systray := app.SystemTray.New()
+ systray.SetIcon(iconData)
+ systray.SetLabel("Hydrapotion")
+ systray.SetTooltip("Hydrapotion - Tracker de hidratacion")
+
+ // Menu del system tray (solo para click derecho)
+ menu := app.NewMenu()
+ menu.Add("Mostrar").OnClick(func(ctx *application.Context) {
+ window.Show()
+ window.Restore()
+ window.Focus()
+ })
+ menu.AddSeparator()
+ menu.Add("+150 ml").OnClick(func(ctx *application.Context) {
+ appService.AddWater(150)
+ })
+ menu.Add("+250 ml").OnClick(func(ctx *application.Context) {
+ appService.AddWater(250)
+ })
+ menu.Add("+500 ml").OnClick(func(ctx *application.Context) {
+ appService.AddWater(500)
+ })
+ menu.AddSeparator()
+ menu.Add("Salir").OnClick(func(ctx *application.Context) {
+ app.Quit()
+ })
+ systray.SetMenu(menu)
+
+ // Click izquierdo SOLO muestra la ventana (no toggle)
+ systray.OnClick(func() {
+ window.Show()
+ window.Restore()
+ window.Focus()
+ window.SetAlwaysOnTop(true)
+ window.SetAlwaysOnTop(false)
+ })
+
+ // Click derecho SOLO abre el menu (no muestra la ventana)
+ systray.OnRightClick(func() {
+ // El menu se abre automaticamente por SetMenu
+ // No hacemos nada mas para evitar mostrar la ventana
+ })
+
+	appService.systray = systray
+
+	// Registrar eventos
+	application.RegisterEvent[map[string]interface{}]("show-reminder")
+
+	err := app.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+// NewApp crea una nueva instancia del servicio App
+func NewApp() *App {
+	a := &App{
 		settings: Settings{
 			Weight:           70,
+			Height:           170,
 			TodayConsumed:    0,
 			DailyGoal:        2450,
 			Language:         "es",
@@ -87,100 +173,35 @@ func main() {
 			ReminderInterval: 1800,
 			CurrentMood:      MoodNeutral,
 		},
-		history:        make(map[string]int),
-		moodHistory:    make([]MoodEntry, 0),
-		shouldClose:    false,
+		history:       make(map[string]int),
+		moodHistory:   make([]MoodEntry, 0),
 		lastIntakeTime: time.Now(),
-		reminderActive: false,
 	}
-	appInstance.loadSettings()
-	appInstance.loadHistory()
-	appInstance.loadMoodHistory()
+	a.loadSettings()
+	a.loadHistory()
+	a.loadMoodHistory()
+	return a
+}
 
-	// Iniciar systray en goroutine
-	go systray.Run(appInstance.onReady, appInstance.onExit)
+// calculateDailyGoal calcula el objetivo diario basado en peso Y estatura
+func (a *App) calculateDailyGoal() int {
+	weight := a.settings.Weight
+	height := a.settings.Height
 
-	err := wails.Run(&options.App{
-		Title: "Hydrapotion",
-		Width:            340,
-		Height:           760,
-		Assets:           assets,
-		BackgroundColour: &options.RGBA{R: 11, G: 23, B: 32, A: 1},
-		OnStartup:        appInstance.startup,
-		OnBeforeClose: func(ctx context.Context) (prevent bool) {
-			if appInstance.shouldClose {
-				return false
-			}
-			runtime.WindowHide(ctx)
-			return true
-		},
-		Bind: []interface{}{
-			appInstance,
-		},
-		Linux: &linux.Options{
-			ProgramName: "Hydrapotion",
-			WebviewGpuPolicy: linux.WebviewGpuPolicyAlways,
-		},
-		Mac: &mac.Options{
-			TitleBar: mac.TitleBarHiddenInset(),
-		},
-		Windows: &windows.Options{
-			WebviewIsTransparent: false,
-			WindowIsTranslucent:  false,
-		},
-	})
+	// Formula: 35ml por kg + ajuste por estatura
+	// Por cada 10cm arriba de 150cm, agregar 100ml extra
+	baseGoal := weight * 35
 
-	if err != nil {
-		println("Error:", err.Error())
+	heightAdjustment := 0
+	if height > 150 {
+		heightAdjustment = ((height - 150) / 10) * 100
 	}
+
+	return baseGoal + heightAdjustment
 }
 
-func (a *App) onReady() {
-	systray.SetIcon(iconData)
-	systray.SetTitle("Hydrapotion")
-	systray.SetTooltip("Hydrapotion - Tracker de hidratacion")
-
-	mShow := systray.AddMenuItem("Mostrar", "Mostrar ventana")
-	systray.AddSeparator()
-	mAdd150 := systray.AddMenuItem("+150 ml", "Agregar 150ml")
-	mAdd250 := systray.AddMenuItem("+250 ml", "Agregar 250ml")
-	mAdd500 := systray.AddMenuItem("+500 ml", "Agregar 500ml")
-	systray.AddSeparator()
-	mQuit := systray.AddMenuItem("Salir", "Salir de la aplicacion")
-
-	mShow.Click(func() {
-		if a.ctx != nil {
-			runtime.WindowShow(a.ctx)
-			runtime.WindowSetAlwaysOnTop(a.ctx, true)
-			runtime.WindowSetAlwaysOnTop(a.ctx, false)
-		}
-	})
-
-	mAdd150.Click(func() {
-		appInstance.AddWater(150)
-	})
-
-	mAdd250.Click(func() {
-		appInstance.AddWater(250)
-	})
-
-	mAdd500.Click(func() {
-		appInstance.AddWater(500)
-	})
-
-	mQuit.Click(func() {
-		a.shouldClose = true
-		systray.Quit()
-		runtime.Quit(a.ctx)
-	})
-}
-
-func (a *App) onExit() {
-}
-
-func (a *App) startup(ctx context.Context) {
-	a.ctx = ctx
-	// Iniciar el timer de recordatorio
+// Startup llamado cuando la app inicia
+func (a *App) Startup() {
 	go a.startReminderTimer()
 }
 
@@ -193,10 +214,8 @@ func (a *App) startReminderTimer() {
 
 	a.mu.Lock()
 	a.lastIntakeTime = time.Now()
-	a.reminderActive = true
 	a.mu.Unlock()
 
-	// Timer inicial
 	a.mu.Lock()
 	a.reminderTimer = time.AfterFunc(interval, a.showReminder)
 	a.mu.Unlock()
@@ -217,25 +236,14 @@ func (a *App) resetReminderTimer() {
 }
 
 func (a *App) showReminder() {
-	a.mu.RLock()
-	ctx := a.ctx
-	consumed := a.settings.TodayConsumed
-	goal := a.settings.DailyGoal
-	a.mu.RUnlock()
-
-	if ctx == nil {
-		return
-	}
-
-	// Enviar evento al frontend
-	runtime.EventsEmit(ctx, "show-reminder", map[string]interface{}{
-		"consumed": consumed,
-		"goal":     goal,
-	})
-
-	// Mostrar la ventana si esta oculta
-	runtime.WindowShow(ctx)
-	runtime.WindowSetAlwaysOnTop(ctx, true)
+ // Emitir evento al frontend
+ if a.window != nil {
+ a.window.EmitEvent("show-reminder", map[string]interface{}{
+ "consumed": a.settings.TodayConsumed,
+ "goal":     a.settings.DailyGoal,
+ })
+ a.window.Show()
+ }
 }
 
 // SnoozeReminder pospone el recordatorio
@@ -251,7 +259,7 @@ func (a *App) SnoozeReminder(minutes int) {
 	a.reminderTimer = time.AfterFunc(interval, a.showReminder)
 }
 
-// DismissReminder cierra el modal y reinicia el timer normal
+// DismissReminder reinicia el timer
 func (a *App) DismissReminder() {
 	a.resetReminderTimer()
 }
@@ -289,7 +297,7 @@ func (a *App) AddWater(ml int) Settings {
 	a.saveSettings()
 	a.saveHistory()
 
-	// Reiniciar timer de recordatorio
+	// Reiniciar timer
 	a.lastIntakeTime = time.Now()
 	if a.reminderTimer != nil {
 		a.reminderTimer.Stop()
@@ -307,7 +315,6 @@ func (a *App) SetMood(mood Mood) Settings {
 	a.settings.CurrentMood = mood
 	a.saveSettings()
 
-	// Guardar en historial de moods
 	entry := MoodEntry{
 		Date: time.Now().Format("2006-01-02 15:04:05"),
 		Mood: mood,
@@ -325,7 +332,6 @@ func (a *App) GetMoodHistory() []MoodEntry {
 	return a.moodHistory
 }
 
-// GetMoodRecommendation devuelve recomendacion segun mood y temperatura
 func (a *App) GetMoodRecommendation(temp int) map[string]interface{} {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
@@ -333,7 +339,6 @@ func (a *App) GetMoodRecommendation(temp int) map[string]interface{} {
 	baseGoal := a.settings.DailyGoal
 	mood := a.settings.CurrentMood
 
-	// Ajustes segun mood
 	multiplier := 1.0
 	var recommendation string
 	var adjustment string
@@ -341,7 +346,7 @@ func (a *App) GetMoodRecommendation(temp int) map[string]interface{} {
 	switch mood {
 	case MoodWell:
 		multiplier = 1.0
-		recommendation = "¡Genial! Sigue asi"
+		recommendation = "Genial! Sigue asi"
 		adjustment = "Normal"
 	case MoodNeutral:
 		multiplier = 1.0
@@ -357,7 +362,6 @@ func (a *App) GetMoodRecommendation(temp int) map[string]interface{} {
 		adjustment = "+15% recomendado"
 	}
 
-	// Ajuste por temperatura
 	if temp >= 30 {
 		multiplier += 0.1
 		adjustment = "Extra por calor"
@@ -380,7 +384,19 @@ func (a *App) SetWeight(weight int) Settings {
 	defer a.mu.Unlock()
 
 	a.settings.Weight = weight
-	a.settings.DailyGoal = weight * 35
+	a.settings.DailyGoal = a.calculateDailyGoal()
+	a.saveSettings()
+
+	return a.settings
+}
+
+// SetHeight establece la estatura y recalcula el objetivo
+func (a *App) SetHeight(height int) Settings {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	a.settings.Height = height
+	a.settings.DailyGoal = a.calculateDailyGoal()
 	a.saveSettings()
 
 	return a.settings
@@ -516,28 +532,37 @@ func (a *App) saveMoodHistory() {
 }
 
 func (a *App) loadSettings() {
-	path := filepath.Join(getConfigDir(), "settings.json")
+	dir := getConfigDir()
+	path := filepath.Join(dir, "settings.json")
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return
 	}
+
 	json.Unmarshal(data, &a.settings)
 }
 
 func (a *App) loadHistory() {
-	path := filepath.Join(getConfigDir(), "history.json")
+	dir := getConfigDir()
+	path := filepath.Join(dir, "history.json")
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return
 	}
+
 	json.Unmarshal(data, &a.history)
 }
 
 func (a *App) loadMoodHistory() {
-	path := filepath.Join(getConfigDir(), "mood_history.json")
+	dir := getConfigDir()
+	path := filepath.Join(dir, "mood_history.json")
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return
 	}
+
 	json.Unmarshal(data, &a.moodHistory)
 }

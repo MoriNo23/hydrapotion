@@ -1,37 +1,21 @@
 import { useState, useEffect } from 'react';
-import { EventsOn } from '../wailsjs/runtime/runtime';
+import { Events } from '@wailsio/runtime';
 import { 
-  GetSettings, AddWater, SetWeight, SetLanguage, SetLocation, 
-  SetReminderInterval, GetWeeklyData, GetMonthlyData, SetMood, 
-  GetMoodRecommendation 
-} from '../wailsjs/go/main/App';
+ GetSettings, AddWater, SetWeight, SetHeight, SetLanguage, SetLocation, 
+ SetReminderInterval, GetWeeklyData, GetMonthlyData, SetMood, 
+ GetMoodRecommendation 
+} from '../bindings/hydrapotion/app';
+import { Settings, HistoryDay, MoodEntry, Mood } from '../bindings/hydrapotion/models';
 import ReminderModal from './ReminderModal';
 import './App.css';
 
-interface Settings {
-  weight: number;
-  today_consumed: number;
-  daily_goal: number;
-  language: string;
-  location: string;
-  last_reset_date: string;
-  reminder_interval: number;
-  current_mood: string;
-}
-
-interface HistoryDay {
-  day: string;
-  ml: number;
-  date: string;
-}
-
 interface MoodRecommendation {
-  mood: string;
-  base_goal: number;
-  adjusted_goal: number;
-  recommendation: string;
-  adjustment: string;
-  multiplier: number;
+ mood: string;
+ base_goal: number;
+ adjusted_goal: number;
+ recommendation: string;
+ adjustment: string;
+ multiplier: number;
 }
 
 const translations = {
@@ -56,8 +40,10 @@ const translations = {
     completed: "completado",
     next_reminder: "Proximo recordatorio",
     timer_active: "Timer activo",
-    weight: "Peso",
-    kg: "kg",
+ weight: "Peso",
+ height: "Estatura",
+ cm: "cm",
+ kg: "kg",
     reminder_interval: "Intervalo",
     minutes: "minutos",
     save: "Guardar",
@@ -89,8 +75,10 @@ const translations = {
     completed: "completed",
     next_reminder: "Next reminder",
     timer_active: "Timer active",
-    weight: "Weight",
-    kg: "kg",
+ weight: "Weight",
+ height: "Height",
+ cm: "cm",
+ kg: "kg",
     reminder_interval: "Interval",
     minutes: "minutes",
     save: "Save",
@@ -113,16 +101,17 @@ const moodEmojis: Record<string, { emoji: string; color: string }> = {
 function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [activeNav, setActiveNav] = useState('home');
-  const [settings, setSettings] = useState<Settings>({
-    weight: 70,
-    today_consumed: 0,
-    daily_goal: 2450,
-    language: "es",
-    location: "",
-    last_reset_date: "",
-    reminder_interval: 1800,
-    current_mood: "neutral",
-  });
+ const [settings, setSettings] = useState<Settings>({
+ weight: 70,
+ height: 170,
+ today_consumed: 0,
+ daily_goal: 2450,
+ language: "es",
+ location: "",
+ last_reset_date: "",
+ reminder_interval: 1800,
+ current_mood: "neutral",
+ });
   const [historyData, setHistoryData] = useState<HistoryDay[]>([]);
   const [period, setPeriod] = useState<"week" | "month">("week");
   const [location, setLocation] = useState("");
@@ -132,8 +121,9 @@ function App() {
   const [reminderData, setReminderData] = useState<{ consumed: number; goal: number } | null>(null);
   const [reminderTimer, setReminderTimer] = useState(0);
   const [timerPercent, setTimerPercent] = useState(100);
-  const [weightInput, setWeightInput] = useState("70");
-  const [intervalInput, setIntervalInput] = useState("30");
+ const [weightInput, setWeightInput] = useState("70");
+ const [heightInput, setHeightInput] = useState("170");
+ const [intervalInput, setIntervalInput] = useState("30");
 
   const t = translations[settings.language as "es" | "en"] || translations.es;
   const consumed = settings.today_consumed;
@@ -176,19 +166,20 @@ function App() {
     loadSettings();
     loadHistory();
 
-    EventsOn('show-reminder', (data: { consumed: number; goal: number }) => {
+    Events.On('show-reminder', (data: { consumed: number; goal: number }) => {
       setReminderData(data);
       setShowReminder(true);
     });
   }, []);
 
-  useEffect(() => {
-    if (settings.location && !location) {
-      setLocation(settings.location);
-    }
-    setWeightInput(settings.weight.toString());
-    setIntervalInput(Math.floor(settings.reminder_interval / 60).toString());
-  }, [settings]);
+ useEffect(() => {
+ if (settings.location && !location) {
+ setLocation(settings.location);
+ }
+ setWeightInput(settings.weight.toString());
+ setHeightInput((settings.height || 170).toString());
+ setIntervalInput(Math.floor(settings.reminder_interval / 60).toString());
+ }, [settings]);
 
   useEffect(() => {
     if (settings.location) {
@@ -318,19 +309,31 @@ function App() {
     }
   };
 
-  const setWeightHandler = async () => {
-    const weight = parseInt(weightInput);
-    if (weight > 0) {
-      try {
-        const s = await SetWeight(weight);
-        setSettings(s);
-      } catch (e) {
-        console.error("Failed to set weight:", e);
-      }
-    }
-  };
+ const setWeightHandler = async () => {
+ const weight = parseInt(weightInput);
+ if (weight > 0) {
+ try {
+ const s = await SetWeight(weight);
+ setSettings(s);
+ } catch (e) {
+ console.error("Failed to set weight:", e);
+ }
+ }
+ };
 
-  const setLanguage = async (language: string) => {
+ const setHeightHandler = async () => {
+ const height = parseInt(heightInput);
+ if (height > 0) {
+ try {
+ const s = await SetHeight(height);
+ setSettings(s);
+ } catch (e) {
+ console.error("Failed to set height:", e);
+ }
+ }
+ };
+
+ const setLanguage = async (language: string) => {
     try {
       const s = await SetLanguage(language);
       setSettings(s);
@@ -383,11 +386,11 @@ function App() {
 
   return (
     <div className="app-container" data-theme={theme}>
-      {/* Sidebar */}
-      <aside className="sidebar">
-        <div className="sidebar-logo">
-          <span className="sidebar-logo-fallback">💧</span>
-        </div>
+ {/* Sidebar */}
+ <aside className="sidebar">
+ <div className="sidebar-logo">
+ <img src="/logo-bgremoved.png" alt="Hydrapotion" />
+ </div>
         
         <nav className="sidebar-nav">
           <button 
@@ -714,27 +717,48 @@ function App() {
 
             <div className="settings-grid">
               {/* Weight Setting */}
-              <div className="card setting-card">
-                <div className="setting-header">
-                  <span className="material-icons-outlined">monitor_weight</span>
-                  <span className="setting-title">{t.weight}</span>
-                </div>
-                <div className="setting-input">
-                  <input
-                    type="number"
-                    value={weightInput}
-                    onChange={(e) => setWeightInput(e.target.value)}
-                    min={30}
-                    max={200}
-                  />
-                  <span className="setting-unit">{t.kg}</span>
-                </div>
-                <button className="setting-save" onClick={setWeightHandler}>
-                  {t.save}
-                </button>
-              </div>
+ <div className="card setting-card">
+ <div className="setting-header">
+ <span className="material-icons-outlined">monitor_weight</span>
+ <span className="setting-title">{t.weight}</span>
+ </div>
+ <div className="setting-input">
+ <input
+ type="number"
+ value={weightInput}
+ onChange={(e) => setWeightInput(e.target.value)}
+ min={30}
+ max={200}
+ />
+ <span className="setting-unit">{t.kg}</span>
+ </div>
+ <button className="setting-save" onClick={setWeightHandler}>
+ {t.save}
+ </button>
+ </div>
 
-              {/* Reminder Interval Setting */}
+ {/* Height Setting */}
+ <div className="card setting-card">
+ <div className="setting-header">
+ <span className="material-icons-outlined">height</span>
+ <span className="setting-title">{t.height}</span>
+ </div>
+ <div className="setting-input">
+ <input
+ type="number"
+ value={heightInput}
+ onChange={(e) => setHeightInput(e.target.value)}
+ min={100}
+ max={250}
+ />
+ <span className="setting-unit">{t.cm}</span>
+ </div>
+ <button className="setting-save" onClick={setHeightHandler}>
+ {t.save}
+ </button>
+ </div>
+
+ {/* Reminder Interval Setting */}
               <div className="card setting-card">
                 <div className="setting-header">
                   <span className="material-icons-outlined">notifications_active</span>
@@ -782,7 +806,7 @@ function App() {
                 </div>
                 <div className="goal-display">
                   <span className="goal-value">{(goal / 1000).toFixed(2)} L</span>
-                  <span className="goal-hint">({settings.language === 'es' ? 'basado en tu peso' : 'based on your weight'})</span>
+                  <span className="goal-hint">({settings.language === 'es' ? 'basado en peso y estatura' : 'based on weight and height'})</span>
                 </div>
               </div>
             </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { AddWater, SnoozeReminder, DismissReminder } from '../wailsjs/go/main/App';
+import { AddWater, SnoozeReminder, DismissReminder } from '../bindings/hydrapotion/app';
 
 interface ReminderModalProps {
   consumed: number;
