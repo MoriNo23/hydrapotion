@@ -608,72 +608,87 @@ body {
 }
 
 /* ========================================
-   TIMER CARD
-   ======================================== */
+TIMER CARD
+======================================== */
 .timer-display {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 20px;
+ display: flex;
+ flex-direction: column;
+ align-items: center;
+ padding: 16px;
 }
 
-.timer-circle {
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  background: rgba(0, 229, 255, 0.05);
-  border: 3px solid rgba(0, 229, 255, 0.2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  margin-bottom: 16px;
+.timer-ring-container {
+ position: relative;
+ width: 130px;
+ height: 130px;
+ margin-bottom: 12px;
 }
 
-.timer-progress {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  border: 3px solid transparent;
-  border-top-color: var(--cyan-electric);
-  transition: transform 1s linear;
+.timer-ring-bg {
+ position: absolute;
+ top: 0;
+ left: 0;
+ width: 100%;
+ height: 100%;
+ border-radius: 50%;
+ background: rgba(0, 229, 255, 0.08);
+}
+
+.timer-inner {
+ position: absolute;
+ top: 50%;
+ left: 50%;
+ transform: translate(-50%, -50%);
+ text-align: center;
+ width: 100px;
 }
 
 .timer-time {
-  font-size: 28px;
-  font-weight: 600;
-  color: var(--text-primary);
-  font-variant-numeric: tabular-nums;
-  z-index: 1;
+ font-size: 28px;
+ font-weight: 600;
+ color: var(--text-primary);
+ font-variant-numeric: tabular-nums;
+ letter-spacing: 1px;
 }
 
-.timer-label {
-  font-size: 12px;
-  color: var(--text-muted);
-  text-align: center;
+.timer-unit {
+ font-size: 10px;
+ color: var(--text-muted);
+ text-transform: uppercase;
+ letter-spacing: 1px;
+ margin-top: 2px;
 }
 
 .timer-status {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 12px;
-  padding: 8px 16px;
-  border-radius: 20px;
-  background: rgba(0, 229, 255, 0.1);
-  font-size: 12px;
-  color: var(--cyan-electric);
+ display: flex;
+ align-items: center;
+ gap: 6px;
+ padding: 6px 14px;
+ border-radius: 16px;
+ background: rgba(0, 229, 255, 0.1);
+ font-size: 11px;
+ color: var(--cyan-electric);
+ font-weight: 500;
 }
 
 .timer-status .material-icons-outlined {
-  font-size: 16px;
-  animation: pulse 2s infinite;
+ font-size: 14px;
+ animation: pulse 2s infinite;
+}
+
+.timer-status.warning {
+ background: rgba(245, 158, 11, 0.1);
+ color: #f59e0b;
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+ 0%, 100% { opacity: 1; }
+ 50% { opacity: 0.5; }
+}
+
+/* Timer nearly empty warning */
+.timer-ring-container.warning .timer-time {
+ color: #f59e0b;
 }
 
 /* ========================================

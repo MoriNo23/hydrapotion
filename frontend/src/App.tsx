@@ -495,16 +495,62 @@ function App() {
             </div>
             
             <div className="timer-display">
-              <div className="timer-circle" style={{ 
-                background: `conic-gradient(var(--cyan-electric) ${timerPercent}%, rgba(0, 229, 255, 0.1) ${timerPercent}%)` 
-              }}>
-                <span className="timer-time">{formatTimer(reminderTimer)}</span>
+              <div className={`timer-ring-container ${timerPercent < 20 ? 'warning' : ''}`}>
+                {/* Background ring */}
+                <svg className="timer-ring-bg" viewBox="0 0 100 100">
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="45"
+                    fill="none"
+                    stroke="rgba(0, 229, 255, 0.1)"
+                    strokeWidth="6"
+                  />
+                </svg>
+                {/* Progress ring */}
+                <svg 
+                  className="timer-ring-bg" 
+                  viewBox="0 0 100 100"
+                  style={{ 
+                    transform: 'rotate(-90deg)',
+                    position: 'absolute',
+                    top: 0,
+                    left: 0
+                  }}
+                >
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="45"
+                    fill="none"
+                    stroke={timerPercent < 20 ? '#f59e0b' : '#00E5FF'}
+                    strokeWidth="6"
+                    strokeLinecap="round"
+                    strokeDasharray={`${2 * Math.PI * 45}`}
+                    strokeDashoffset={`${2 * Math.PI * 45 * (1 - timerPercent / 100)}`}
+                    style={{ 
+                      filter: timerPercent < 20 
+                        ? 'drop-shadow(0 0 8px rgba(245, 158, 11, 0.6))' 
+                        : 'drop-shadow(0 0 8px rgba(0, 229, 255, 0.6))',
+                      transition: 'stroke-dashoffset 0.5s ease'
+                    }}
+                  />
+                </svg>
+                <div className="timer-inner">
+                  <span className="timer-time">{formatTimer(reminderTimer)}</span>
+                  <div className="timer-unit">{t.timer_active}</div>
+                </div>
               </div>
             </div>
             
-            <div className="timer-status">
-              <span className="material-icons-outlined">schedule</span>
-              {t.timer_active}
+            <div className={`timer-status ${timerPercent < 20 ? 'warning' : ''}`}>
+              <span className="material-icons-outlined">
+                {timerPercent < 20 ? 'alarm' : 'schedule'}
+              </span>
+              {timerPercent < 20 
+                ? (settings.language === 'es' ? '¡Bebe pronto!' : 'Drink soon!')
+                : (settings.language === 'es' ? 'Recordatorio activo' : 'Reminder active')
+              }
             </div>
           </div>
 
