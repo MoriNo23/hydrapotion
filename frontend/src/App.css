@@ -444,22 +444,41 @@ body {
 }
 
 .mood-recommendation {
-  padding: 12px;
-  background: rgba(0, 229, 255, 0.05);
-  border-radius: 10px;
-  border-left: 3px solid var(--cyan-electric);
+ padding: 12px;
+ background: rgba(0, 229, 255, 0.05);
+ border-radius: 10px;
+ border-left: 3px solid var(--cyan-electric);
 }
 
 .mood-rec-text {
-  font-size: 12px;
-  color: var(--text-secondary);
+ font-size: 12px;
+ color: var(--text-secondary);
 }
 
-.mood-rec-adjust {
-  font-size: 11px;
-  color: var(--cyan-electric);
-  font-weight: 500;
-  margin-top: 4px;
+.mood-breakdown {
+ margin-top: 10px;
+ padding-top: 10px;
+ border-top: 1px solid var(--card-border);
+}
+
+.breakdown-row {
+ display: flex;
+ justify-content: space-between;
+ font-size: 11px;
+ padding: 4px 0;
+ color: var(--text-muted);
+}
+
+.breakdown-row.bonus {
+ color: var(--cyan-electric);
+}
+
+.breakdown-row.total {
+ margin-top: 6px;
+ padding-top: 6px;
+ border-top: 1px dashed var(--card-border);
+ color: var(--text-secondary);
+ font-weight: 500;
 }
 
 /* ========================================

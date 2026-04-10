@@ -9,86 +9,110 @@ import { Settings, HistoryDay, MoodEntry, Mood } from '../bindings/hydrapotion/m
 import ReminderModal from './ReminderModal';
 import './App.css';
 
+interface DynamicGoal {
+ base_goal: number;
+ mood_history_bonus: number;
+ current_mood_bonus: number;
+ climate_bonus: number;
+ total_goal: number;
+ consumed: number;
+ percentage: number;
+}
+
 interface MoodRecommendation {
  mood: string;
  base_goal: number;
  adjusted_goal: number;
+ mood_history_bonus: number;
+ current_mood_bonus: number;
+ climate_bonus: number;
  recommendation: string;
- adjustment: string;
- multiplier: number;
+ mood_adjustment: string;
 }
 
 const translations = {
-  es: {
-    app_name: "Hydrapotion",
-    daily_progress: "Progreso Diario",
-    register_intake: "Registrar Intake",
-    mood: "Estado Mental",
-    history: "Historial",
-    weather: "Clima",
-    settings: "Ajustes",
-    week: "Semana",
-    month: "Mes",
-    avg: "Promedio",
-    total: "Total",
-    placeholder: "Buscar ciudad...",
-    mood_well: "Bien",
-    mood_neutral: "Neutral",
-    mood_low: "Bajo",
-    mood_tense: "Tenso",
-    remaining: "faltan",
-    completed: "completado",
-    next_reminder: "Proximo recordatorio",
-    timer_active: "Timer activo",
+ es: {
+ app_name: "Hydrapotion",
+ daily_progress: "Progreso Diario",
+ register_intake: "Registrar Intake",
+ mood: "Estado Mental",
+ history: "Historial",
+ weather: "Clima",
+ settings: "Ajustes",
+ week: "Semana",
+ month: "Mes",
+ avg: "Promedio",
+ total: "Total",
+ placeholder: "Buscar ciudad...",
+ mood_well: "Bien",
+ mood_neutral: "Neutral",
+ mood_low: "Bajo",
+ mood_tense: "Tenso",
+ remaining: "faltan",
+ completed: "completado",
+ next_reminder: "Proximo recordatorio",
+ timer_active: "Timer activo",
  weight: "Peso",
  height: "Estatura",
  cm: "cm",
  kg: "kg",
-    reminder_interval: "Intervalo",
-    minutes: "minutos",
-    save: "Guardar",
-    location_label: "Ubicacion",
-    streak: "Racha",
-    days: "dias",
-    best_day: "Mejor dia",
-    goal_achieved: "Meta alcanzada",
-    times: "veces",
-  },
-  en: {
-    app_name: "Hydrapotion",
-    daily_progress: "Daily Progress",
-    register_intake: "Log Intake",
-    mood: "Mental State",
-    history: "History",
-    weather: "Weather",
-    settings: "Settings",
-    week: "Week",
-    month: "Month",
-    avg: "Average",
-    total: "Total",
-    placeholder: "Search city...",
-    mood_well: "Well",
-    mood_neutral: "Neutral",
-    mood_low: "Low",
-    mood_tense: "Tense",
-    remaining: "remaining",
-    completed: "completed",
-    next_reminder: "Next reminder",
-    timer_active: "Timer active",
+ reminder_interval: "Intervalo",
+ minutes: "minutos",
+ save: "Guardar",
+ location_label: "Ubicacion",
+ streak: "Racha",
+ days: "dias",
+ best_day: "Mejor dia",
+ goal_achieved: "Meta alcanzada",
+ times: "veces",
+ base: "Base",
+ mood_history: "Mood 7 dias",
+ current_mood: "Mood hoy",
+ climate: "Clima",
+ dynamic_goal: "Meta dinamica",
+ breakdown: "Desglose",
+ },
+ en: {
+ app_name: "Hydrapotion",
+ daily_progress: "Daily Progress",
+ register_intake: "Log Intake",
+ mood: "Mental State",
+ history: "History",
+ weather: "Weather",
+ settings: "Settings",
+ week: "Week",
+ month: "Month",
+ avg: "Average",
+ total: "Total",
+ placeholder: "Search city...",
+ mood_well: "Well",
+ mood_neutral: "Neutral",
+ mood_low: "Low",
+ mood_tense: "Tense",
+ remaining: "remaining",
+ completed: "completed",
+ next_reminder: "Next reminder",
+ timer_active: "Timer active",
  weight: "Weight",
  height: "Height",
  cm: "cm",
  kg: "kg",
-    reminder_interval: "Interval",
-    minutes: "minutes",
-    save: "Save",
-    location_label: "Location",
-    streak: "Streak",
-    days: "days",
-    best_day: "Best day",
-    goal_achieved: "Goal achieved",
-    times: "times",
-  },
+ reminder_interval: "Interval",
+ minutes: "minutes",
+ save: "Save",
+ location_label: "Location",
+ streak: "Streak",
+ days: "days",
+ best_day: "Best day",
+ goal_achieved: "Goal achieved",
+ times: "times",
+ base: "Base",
+ mood_history: "Mood 7 days",
+ current_mood: "Mood today",
+ climate: "Climate",
+ dynamic_goal: "Dynamic goal",
+ breakdown: "Breakdown",
+ },
 };
 
 const moodEmojis: Record<string, { emoji: string; color: string }> = {
@@ -489,14 +513,41 @@ function App() {
                 ))}
               </div>
               
-              {moodRec && (
-                <div className="mood-recommendation">
-                  <span className="mood-rec-text">{moodRec.recommendation}</span>
-                  {moodRec.multiplier > 1 && (
-                    <div className="mood-rec-adjust">{moodRec.adjustment}</div>
-                  )}
-                </div>
-              )}
+ {moodRec && (
+ <div className="mood-recommendation">
+ <span className="mood-rec-text">{moodRec.recommendation}</span>
+ {(moodRec.mood_history_bonus > 0 || moodRec.current_mood_bonus > 0 || moodRec.climate_bonus > 0) && (
+ <div className="mood-breakdown">
+ <div className="breakdown-row">
+ <span>{t.base}</span>
+ <span>{moodRec.base_goal}ml</span>
+ </div>
+ {moodRec.mood_history_bonus > 0 && (
+ <div className="breakdown-row bonus">
+ <span>{t.mood_history}</span>
+ <span>+{moodRec.mood_history_bonus}ml</span>
+ </div>
+ )}
+ {moodRec.current_mood_bonus > 0 && (
+ <div className="breakdown-row bonus">
+ <span>{t.current_mood}</span>
+ <span>+{moodRec.current_mood_bonus}ml</span>
+ </div>
+ )}
+ {moodRec.climate_bonus > 0 && (
+ <div className="breakdown-row bonus">
+ <span>{t.climate}</span>
+ <span>+{moodRec.climate_bonus}ml</span>
+ </div>
+ )}
+ <div className="breakdown-row total">
+ <span>{t.dynamic_goal}</span>
+ <span>{moodRec.adjusted_goal}ml</span>
+ </div>
+ </div>
+ )}
+ </div>
+ )}
             </div>
 
             {/* Intake Card */}

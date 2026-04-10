@@ -14,7 +14,12 @@ Desktop hydration tracker with smart reminders and mood-based recommendations.
 ## Features
 
 - Daily water tracking with progress visualization
-- Mood-based recommendations
+- **Dynamic goal based on mood + climate**:
+  - Base: 35ml/kg + height adjustment
+  - Mood history bonus (last 7 days stress)
+  - Current mood bonus (low: +100ml, tense: +150ml)
+  - Climate bonus (temperature + humidity)
+- Mood-based recommendations (Well/Neutral/Low/Tense)
 - Smart reminders with snooze
 - Weather integration (Open-Meteo)
 - Weekly/monthly stats
