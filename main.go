@@ -1,3 +1,6 @@
+// Hydrapotion - Desktop hydration tracker with smart reminders
+// Author: Mori
+// License: MIT
 package main
 
 import (
@@ -19,17 +22,22 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// --- Models ---
+// =============================================================================
+// Data Models
+// =============================================================================
 
+// Mood represents user's mental/physical state.
+// Affects daily water goal via bonus.
 type Mood int
 
 const (
-	MoodWell Mood = iota
-	MoodNeutral
-	MoodLow
-	MoodTense
+	MoodWell    Mood = iota // Feeling good - no bonus
+	MoodNeutral             // Neutral state
+	MoodLow                 // Feeling low - +200ml bonus
+	MoodTense               // Feeling tense/stressed - +400ml bonus
 )
 
+// String returns Spanish label for mood.
 func (m Mood) String() string {
 	switch m {
 	case MoodWell:
@@ -44,35 +52,43 @@ func (m Mood) String() string {
 	return "Neutral"
 }
 
+// Settings stores user preferences.
+// Persisted to JSON in ~/.hydrapotion/
 type Settings struct {
 	Weight           int    `json:"weight"`
 	TodayConsumed    int    `json:"today_consumed"`
 	LastResetDate    string `json:"last_reset_date"`
 	Language         string `json:"language"`
 	Location         string `json:"location"`
-	ReminderInterval int    `json:"reminder_interval"` // en segundos
+	ReminderInterval int    `json:"reminder_interval"` // seconds
 	CurrentMood      Mood   `json:"current_mood"`
 }
 
+// HistoryEntry represents one day's water intake.
 type HistoryEntry struct {
-	Date string `json:"date"`
+	Date string `json:"date"` // YYYY-MM-DD format
 	Ml   int    `json:"ml"`
 }
 
-// --- App State ---
+// =============================================================================
+// Application State
+// =============================================================================
 
+// HydrapotionApp manages all app state and UI.
 type HydrapotionApp struct {
-	settings     Settings
-	history      []HistoryEntry
-	mu           sync.RWMutex
-	dataDir      string
-	reminder     *time.Timer
-	onUpdate     func()
-	mainWindow   fyne.Window
-	reminderWin  fyne.Window
-	app          fyne.App
+	settings    Settings       // User settings
+	history     []HistoryEntry // Daily history
+	mu          sync.RWMutex   // Thread-safe access
+	dataDir     string         // ~/.hydrapotion path
+	reminder    *time.Timer    // Reminder timer
+	onUpdate    func()         // UI update callback
+	mainWindow  fyne.Window    // Primary window
+	reminderWin fyne.Window    // Reminder popup
+	app         fyne.App       // Fyne app instance
 }
 
+// NewHydrapotionApp creates new app instance.
+// Initializes data directory and loads persisted data.
 func NewHydrapotionApp(a fyne.App) *HydrapotionApp {
 	home, _ := os.UserHomeDir()
 	dataDir := filepath.Join(home, ".hydrapotion")
@@ -96,10 +112,17 @@ func NewHydrapotionApp(a fyne.App) *HydrapotionApp {
 	return h
 }
 
+// dataFile returns full path for a data file in dataDir.
 func (h *HydrapotionApp) dataFile(name string) string {
 	return filepath.Join(h.dataDir, name)
 }
 
+// =============================================================================
+// Persistence - Load/Save
+// =============================================================================
+
+// loadSettings reads settings from JSON file.
+// No error handling needed - defaults used if missing.
 func (h *HydrapotionApp) loadSettings() {
 	data, err := os.ReadFile(h.dataFile("settings.json"))
 	if err != nil {
@@ -108,11 +131,13 @@ func (h *HydrapotionApp) loadSettings() {
 	json.Unmarshal(data, &h.settings)
 }
 
+// saveSettings writes settings to JSON file.
 func (h *HydrapotionApp) saveSettings() {
 	data, _ := json.MarshalIndent(h.settings, "", " ")
 	os.WriteFile(h.dataFile("settings.json"), data, 0644)
 }
 
+// loadHistory reads history from JSON file.
 func (h *HydrapotionApp) loadHistory() {
 	data, err := os.ReadFile(h.dataFile("history.json"))
 	if err != nil {
@@ -121,15 +146,22 @@ func (h *HydrapotionApp) loadHistory() {
 	json.Unmarshal(data, &h.history)
 }
 
+// saveHistory writes history to JSON file.
 func (h *HydrapotionApp) saveHistory() {
 	data, _ := json.MarshalIndent(h.history, "", " ")
 	os.WriteFile(h.dataFile("history.json"), data, 0644)
 }
 
+// =============================================================================
+// Core Business Logic
+// =============================================================================
+
+// todayStr returns current date as YYYY-MM-DD string.
 func (h *HydrapotionApp) todayStr() string {
 	return time.Now().Format("2006-01-02")
 }
 
+// resetIfNewDay resets daily consumption if date changed.
 func (h *HydrapotionApp) resetIfNewDay() {
 	today := h.todayStr()
 	if h.settings.LastResetDate != today {
@@ -140,6 +172,9 @@ func (h *HydrapotionApp) resetIfNewDay() {
 	}
 }
 
+// CalculateGoal computes daily water goal.
+// Base: 35ml per kg body weight.
+// Mood bonus: +200ml (low) or +400ml (tense).
 func (h *HydrapotionApp) CalculateGoal() int {
 	baseGoal := h.settings.Weight * 35
 
@@ -154,6 +189,8 @@ func (h *HydrapotionApp) CalculateGoal() int {
 	return baseGoal + moodBonus
 }
 
+// AddWater records water intake.
+// Updates settings, history, persists, triggers UI update.
 func (h *HydrapotionApp) AddWater(ml int) {
 	h.mu.Lock()
 	h.resetIfNewDay()
@@ -183,6 +220,7 @@ func (h *HydrapotionApp) AddWater(ml int) {
 	h.startReminderTimer()
 }
 
+// SetMood updates user's mood.
 func (h *HydrapotionApp) SetMood(mood Mood) {
 	h.mu.Lock()
 	h.settings.CurrentMood = mood
@@ -194,6 +232,7 @@ func (h *HydrapotionApp) SetMood(mood Mood) {
 	}
 }
 
+// SetWeight updates user's weight.
 func (h *HydrapotionApp) SetWeight(weight int) {
 	h.mu.Lock()
 	h.settings.Weight = weight
@@ -205,6 +244,16 @@ func (h *HydrapotionApp) SetWeight(weight int) {
 	}
 }
 
+// SetReminderInterval updates reminder frequency.
+func (h *HydrapotionApp) SetReminderInterval(seconds int) {
+	h.mu.Lock()
+	h.settings.ReminderInterval = seconds
+	h.saveSettings()
+	h.mu.Unlock()
+}
+
+// GetProgress returns current hydration status.
+// Thread-safe read with auto day reset.
 func (h *HydrapotionApp) GetProgress() (consumed int, goal int, percent float64) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -222,6 +271,8 @@ func (h *HydrapotionApp) GetProgress() (consumed int, goal int, percent float64)
 	return
 }
 
+// GetWeeklyData returns last 7 days of history.
+// Used for weekly chart.
 func (h *HydrapotionApp) GetWeeklyData() []HistoryEntry {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -245,69 +296,76 @@ func (h *HydrapotionApp) GetWeeklyData() []HistoryEntry {
 	return result
 }
 
+// =============================================================================
+// Reminders
+// =============================================================================
+
+// startReminderTimer schedules next reminder popup.
 func (h *HydrapotionApp) startReminderTimer() {
 	if h.reminder != nil {
 		h.reminder.Stop()
 	}
 
-	// 20 segundos para pruebas
-	duration := 20 * time.Second
+	duration := time.Duration(h.settings.ReminderInterval) * time.Second
 	h.reminder = time.AfterFunc(duration, func() {
 		h.showReminderPopup()
 	})
 }
 
+// showReminderPopup displays reminder notification and popup window.
 func (h *HydrapotionApp) showReminderPopup() {
-	// Notificacion del sistema
 	notifySend("Bebe Agua!", "Es hora de hidratarte!")
 
-	// Mostrar ventana popup
 	if h.reminderWin != nil {
+		ui := h.CreateReminderUI()
+		h.reminderWin.SetContent(ui)
 		h.reminderWin.Show()
 		h.reminderWin.RequestFocus()
 		return
 	}
 
-	// Crear ventana de recordatorio
 	h.reminderWin = h.app.NewWindow("Recordatorio")
 	h.reminderWin.Resize(fyne.NewSize(350, 400))
 
 	ui := h.CreateReminderUI()
 	h.reminderWin.SetContent(ui)
 	h.reminderWin.Show()
+	playSound("popup_appear.wav")
 }
 
+// CreateReminderUI builds reminder popup content.
 func (h *HydrapotionApp) CreateReminderUI() fyne.CanvasObject {
 	consumed, goal, percent := h.GetProgress()
 
-	// Titulo
 	title := widget.NewLabelWithStyle("Bebe Agua!", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
 	title.Importance = widget.HighImportance
 
-	// Progreso actual
 	progressText := widget.NewLabel(fmt.Sprintf("Hoy: %d / %d ml (%.0f%%)", consumed, goal, percent))
 	progressBar := widget.NewProgressBar()
 	progressBar.Min = 0
 	progressBar.Max = 100
 	progressBar.SetValue(percent)
 
-	// Botones para agregar agua
+	// Water buttons with sound
 	addWaterContainer := container.NewGridWithColumns(3,
 		widget.NewButton("150ml", func() {
 			h.AddWater(150)
+			playSound("add_water.wav")
 			h.closeReminderWindow()
 		}),
 		widget.NewButton("250ml", func() {
 			h.AddWater(250)
+			playSound("add_water.wav")
 			h.closeReminderWindow()
 		}),
 		widget.NewButton("500ml", func() {
 			h.AddWater(500)
+			playSound("add_water.wav")
 			h.closeReminderWindow()
 		}),
 	)
 
-	// Botones de posponer
+	// Snooze buttons
 	snoozeContainer := container.NewGridWithColumns(3,
 		widget.NewButton("5 min", func() {
 			h.snoozeReminder(5)
@@ -316,11 +374,10 @@ func (h *HydrapotionApp) CreateReminderUI() fyne.CanvasObject {
 			h.snoozeReminder(15)
 		}),
 		widget.NewButton("30 min", func() {
-			h.snoezeReminder(30)
+			h.snoozeReminder(30)
 		}),
 	)
 
-	// Boton cerrar
 	closeBtn := widget.NewButton("Cerrar", func() {
 		h.closeReminderWindow()
 	})
@@ -341,6 +398,7 @@ func (h *HydrapotionApp) CreateReminderUI() fyne.CanvasObject {
 	)
 }
 
+// snoozeReminder delays reminder by specified minutes.
 func (h *HydrapotionApp) snoozeReminder(minutes int) {
 	h.closeReminderWindow()
 	if h.reminder != nil {
@@ -351,43 +409,96 @@ func (h *HydrapotionApp) snoozeReminder(minutes int) {
 	})
 }
 
-func (h *HydrapotionApp) snoezeReminder(minutes int) {
-	h.snoozeReminder(minutes)
-}
-
+// closeReminderWindow hides reminder popup.
 func (h *HydrapotionApp) closeReminderWindow() {
 	if h.reminderWin != nil {
 		h.reminderWin.Hide()
 	}
 }
 
+// =============================================================================
+// System Notifications
+// =============================================================================
+
+// notifySend shows Linux desktop notification.
 func notifySend(title, message string) {
 	cmd := exec.Command("notify-send", "-i", "water", title, message)
 	cmd.Run()
 }
 
-// --- Chart Widget ---
+// =============================================================================
+// Sound Effects
+// =============================================================================
 
+// appSoundDir stores sounds in user data directory.
+// Initialized on first playSound() call.
+var appSoundDir string
+
+// initSounds copies sound files from install dir to user data dir.
+// Called lazily to ensure sounds work from any working directory.
+func initSounds() {
+	home, _ := os.UserHomeDir()
+	appSoundDir = filepath.Join(home, ".hydrapotion", "sounds")
+	os.MkdirAll(appSoundDir, 0755)
+
+	for _, name := range []string{"popup_appear.wav", "add_water.wav"} {
+		src := filepath.Join(home, "Descargas", "Hydrapotion", name)
+		dst := filepath.Join(appSoundDir, name)
+		if _, err := os.Stat(src); err == nil {
+			copyFile(src, dst)
+		}
+	}
+}
+
+// copyFile copies audio file from src to dst.
+func copyFile(src, dst string) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dst, data, 0644)
+}
+
+// playSound plays audio file using PulseAudio.
+// Initializes sounds on first call.
+func playSound(soundPath string) {
+	if appSoundDir == "" {
+		initSounds()
+	}
+	cmd := exec.Command("paplay", filepath.Join(appSoundDir, soundPath))
+	cmd.Run()
+}
+
+// =============================================================================
+// Chart Widget - Custom Fyne widget
+// =============================================================================
+
+// WaterChart displays weekly progress as bar chart.
+// Custom Fyne widget rendering daily bars.
 type WaterChart struct {
 	widget.BaseWidget
 	data []HistoryEntry
 }
 
+// NewWaterChart creates chart with given data.
 func NewWaterChart(data []HistoryEntry) *WaterChart {
 	c := &WaterChart{data: data}
 	c.ExtendBaseWidget(c)
 	return c
 }
 
+// CreateRenderer returns custom renderer.
 func (c *WaterChart) CreateRenderer() fyne.WidgetRenderer {
 	return &waterChartRenderer{chart: c}
 }
 
+// waterChartRenderer handles chart rendering.
 type waterChartRenderer struct {
 	chart *WaterChart
 	bars  []*canvas.Rectangle
 }
 
+// Layout positions bar rectangles within chart area.
 func (r *waterChartRenderer) Layout(size fyne.Size) {
 	if len(r.chart.data) == 0 {
 		return
@@ -424,15 +535,18 @@ func (r *waterChartRenderer) Layout(size fyne.Size) {
 	}
 }
 
+// MinSize returns minimum chart size.
 func (r *waterChartRenderer) MinSize() fyne.Size {
 	return fyne.NewSize(200, 100)
 }
 
+// Refresh re-renders chart.
 func (r *waterChartRenderer) Refresh() {
 	r.Layout(r.chart.Size())
 	canvas.Refresh(r.chart)
 }
 
+// Objects returns bar rectangles.
 func (r *waterChartRenderer) Objects() []fyne.CanvasObject {
 	objs := make([]fyne.CanvasObject, len(r.bars))
 	for i, b := range r.bars {
@@ -441,29 +555,39 @@ func (r *waterChartRenderer) Objects() []fyne.CanvasObject {
 	return objs
 }
 
+// Destroy is no-op for this renderer.
 func (r *waterChartRenderer) Destroy() {}
 
-// --- Main UI ---
+// =============================================================================
+// Main UI
+// =============================================================================
 
+// CreateMainUI builds primary window content.
 func (h *HydrapotionApp) CreateMainUI() fyne.CanvasObject {
-	// Header con titulo
 	title := widget.NewLabelWithStyle("Hydrapotion", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
 	title.Importance = widget.HighImportance
 
-	// Progreso
 	progressLabel := widget.NewLabel("0 / 0 ml (0%)")
 	progressBar := widget.NewProgressBar()
 	progressBar.Min = 0
 	progressBar.Max = 100
 
-	// Botones de agregar agua
+	// Water buttons with sound
 	addWaterContainer := container.NewGridWithColumns(3,
-		widget.NewButton("150ml", func() { h.AddWater(150) }),
-		widget.NewButton("250ml", func() { h.AddWater(250) }),
-		widget.NewButton("500ml", func() { h.AddWater(500) }),
+		widget.NewButton("150ml", func() {
+			h.AddWater(150)
+			playSound("add_water.wav")
+		}),
+		widget.NewButton("250ml", func() {
+			h.AddWater(250)
+			playSound("add_water.wav")
+		}),
+		widget.NewButton("500ml", func() {
+			h.AddWater(500)
+			playSound("add_water.wav")
+		}),
 	)
 
-	// Selector de mood
 	moodLabel := widget.NewLabel("Estado mental:")
 	moodSelect := widget.NewSelect([]string{"Bien", "Neutral", "Bajo", "Tenso"}, func(s string) {
 		var m Mood
@@ -481,7 +605,6 @@ func (h *HydrapotionApp) CreateMainUI() fyne.CanvasObject {
 	})
 	moodSelect.SetSelected(h.settings.CurrentMood.String())
 
-	// Settings
 	weightLabel := widget.NewLabel(fmt.Sprintf("Peso: %d kg", h.settings.Weight))
 	weightEntry := widget.NewEntry()
 	weightEntry.SetPlaceHolder("Peso en kg")
@@ -496,11 +619,9 @@ func (h *HydrapotionApp) CreateMainUI() fyne.CanvasObject {
 		}
 	})
 
-	// Chart de historial
 	chartLabel := widget.NewLabel("Progreso semanal:")
 	chart := NewWaterChart(h.GetWeeklyData())
 
-	// Update callback
 	h.onUpdate = func() {
 		consumed, goal, percent := h.GetProgress()
 		progressLabel.SetText(fmt.Sprintf("%d / %d ml (%.0f%%)", consumed, goal, percent))
@@ -509,10 +630,8 @@ func (h *HydrapotionApp) CreateMainUI() fyne.CanvasObject {
 		chart.Refresh()
 	}
 
-	// Initial update
 	h.onUpdate()
 
-	// Layout principal
 	content := container.NewVBox(
 		title,
 		widget.NewSeparator(),
@@ -536,13 +655,21 @@ func (h *HydrapotionApp) CreateMainUI() fyne.CanvasObject {
 	return container.NewPadded(content)
 }
 
+// =============================================================================
+// System Tray
+// =============================================================================
+
+// setupSystemTray creates tray menu with quick actions.
 func (h *HydrapotionApp) setupSystemTray() {
 	if desk, ok := h.app.(desktop.App); ok {
-		// Menu del system tray
 		menu := fyne.NewMenu("Hydrapotion",
 			fyne.NewMenuItem("Agregar 150ml", func() { h.AddWater(150) }),
 			fyne.NewMenuItem("Agregar 250ml", func() { h.AddWater(250) }),
 			fyne.NewMenuItem("Agregar 500ml", func() { h.AddWater(500) }),
+			fyne.NewMenuItemSeparator(),
+			fyne.NewMenuItem("Cambiar intervalo recordatorio", func() {
+				h.showIntervalDialog()
+			}),
 			fyne.NewMenuItemSeparator(),
 			fyne.NewMenuItem("Mostrar ventana", func() {
 				if h.mainWindow != nil {
@@ -558,30 +685,66 @@ func (h *HydrapotionApp) setupSystemTray() {
 	}
 }
 
+// showIntervalDialog shows dialog to change reminder interval.
+func (h *HydrapotionApp) showIntervalDialog() {
+	dialog := h.app.NewWindow("Intervalo de Recordatorio")
+	dialog.Resize(fyne.NewSize(300, 200))
+
+	currentMin := h.settings.ReminderInterval / 60
+
+	label := widget.NewLabel(fmt.Sprintf("Intervalo actual: %d minutos", currentMin))
+	label.Alignment = fyne.TextAlignCenter
+
+	options := []string{"5 min", "10 min", "15 min", "30 min", "45 min", "60 min"}
+	selectWidget := widget.NewSelect(options, func(s string) {
+		var minutes int
+		fmt.Sscanf(s, "%d", &minutes)
+		h.SetReminderInterval(minutes * 60)
+		dialog.Close()
+	})
+	selectWidget.SetSelected(fmt.Sprintf("%d min", currentMin))
+
+	infoLabel := widget.NewLabel("Selecciona el nuevo intervalo:")
+	infoLabel.Alignment = fyne.TextAlignCenter
+
+	content := container.NewVBox(
+		label,
+		widget.NewSeparator(),
+		infoLabel,
+		selectWidget,
+		layout.NewSpacer(),
+		widget.NewButton("Cancelar", func() { dialog.Close() }),
+	)
+
+	dialog.SetContent(container.NewPadded(content))
+	dialog.Show()
+}
+
+// =============================================================================
+// Main Entry Point
+// =============================================================================
+
 func main() {
 	a := app.NewWithID("hydrapotion")
 	w := a.NewWindow("Hydrapotion")
 
-	// Tema oscuro
+	// Dark theme
 	a.Settings().SetTheme(theme.DarkTheme())
 
 	h := NewHydrapotionApp(a)
 	h.mainWindow = w
 
-	// Setup system tray
 	h.setupSystemTray()
 
-	// UI principal
 	ui := h.CreateMainUI()
 	w.SetContent(ui)
 	w.Resize(fyne.NewSize(400, 550))
 
-	// Cuando cierra la ventana principal, ocultar en vez de salir
+	// Hide instead of close - tray app behavior
 	w.SetCloseIntercept(func() {
 		w.Hide()
 	})
 
-	// Iniciar timer de recordatorio
 	h.startReminderTimer()
 
 	w.ShowAndRun()

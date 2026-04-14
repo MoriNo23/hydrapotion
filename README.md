@@ -14,6 +14,7 @@ Desktop hydration tracker with smart reminders and mood-based recommendations.
   - Adjusts recommendations based on how you feel
 - **System tray integration** - Minimizes to tray, quick add from context menu
 - **Smart reminders** - Popup notifications with snooze (5/15/30 min)
+- **ASMR sound effects** - Pleasant keyboard sounds on interactions
 - **Weekly progress chart** - Visual bar graph of last 7 days
 - **Dark theme** - Easy on the eyes
 - **Lightweight** - Single binary, no external dependencies
@@ -28,6 +29,7 @@ Desktop hydration tracker with smart reminders and mood-based recommendations.
 │  ████████████░░░░░░░░░░░░░░░░░  │
 ├─────────────────────────────────┤
 │  [150ml]  [250ml]  [500ml]      │
+│        🔊 ASMR sounds          │
 ├─────────────────────────────────┤
 │  Estado: [Neutral ▼]            │
 │  Peso: 70 kg                    │
@@ -45,6 +47,7 @@ Desktop hydration tracker with smart reminders and mood-based recommendations.
 ### Requirements
 - Go 1.21+
 - Linux (uses notify-send for notifications)
+- paplay (PulseAudio) for sound effects
 
 ### Build
 
