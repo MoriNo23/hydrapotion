@@ -7,9 +7,6 @@ hydrapotion
 *.so
 *.dylib
 
-# Dependencias de Node
-frontend/node_modules/
-
 # Archivos de desarrollo
 *.log
 *.swp
@@ -28,3 +25,6 @@ Thumbs.db
 # Archivos temporales
 tmp/
 temp/
+
+# Instrucciones del agente (no committear)
+AGENTS.md
