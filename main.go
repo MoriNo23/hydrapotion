@@ -8,7 +8,6 @@ import (
 	"image/color"
 	"io"
 	"math"
-	"strings"
 	"net/http"
 	"net/url"
 	"os"
@@ -28,6 +27,78 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
+// ----------------------------------------------------------------
+// i18n
+// ----------------------------------------------------------------
+var currentLang string = "es"
+
+var translations = map[string]map[string]string{
+	"how_much":         {"es": "¿Cuánto vas a tomar?", "en": "How much will you drink?", "zh": "你要喝多少？"},
+	"mood":             {"es": "Estado mental:", "en": "Mood:", "zh": "情绪状态："},
+	"mood_well":        {"es": "Bien", "en": "Good", "zh": "好"},
+	"mood_neutral":     {"es": "Neutral", "en": "Neutral", "zh": "一般"},
+	"mood_low":         {"es": "Bajo", "en": "Low", "zh": "低落"},
+	"mood_tense":       {"es": "Tenso", "en": "Tense", "zh": "紧张"},
+	"goal":             {"es": "Meta", "en": "Goal", "zh": "目标"},
+	"avg":              {"es": "Prom", "en": "Avg", "zh": "平均"},
+	"sun":              {"es": "Dom", "en": "Sun", "zh": "日"},
+	"mon":              {"es": "Lun", "en": "Mon", "zh": "一"},
+	"tue":              {"es": "Mar", "en": "Tue", "zh": "二"},
+	"wed":              {"es": "Mie", "en": "Wed", "zh": "三"},
+	"thu":              {"es": "Jue", "en": "Thu", "zh": "四"},
+	"fri":              {"es": "Vie", "en": "Fri", "zh": "五"},
+	"sat":              {"es": "Sab", "en": "Sat", "zh": "六"},
+	"settings_title":   {"es": "Configuración", "en": "Settings", "zh": "设置"},
+	"weight":           {"es": "Peso", "en": "Weight", "zh": "体重"},
+	"weight_ph":        {"es": "Peso en kg", "en": "Weight in kg", "zh": "体重（公斤）"},
+	"height":           {"es": "Altura", "en": "Height", "zh": "身高"},
+	"height_ph":        {"es": "Altura en cm", "en": "Height in cm", "zh": "身高（厘米）"},
+	"save":             {"es": "Guardar", "en": "Save", "zh": "保存"},
+	"reminder":         {"es": "Recordatorio", "en": "Reminder", "zh": "提醒"},
+	"min":              {"es": "min", "en": "min", "zh": "分钟"},
+	"hr":               {"es": "h", "en": "h", "zh": "小时"},
+	"location":         {"es": "Ubicación", "en": "Location", "zh": "位置"},
+	"not_set":          {"es": "No configurada", "en": "Not set", "zh": "未设置"},
+	"search_location":  {"es": "Buscar ubicación", "en": "Search location", "zh": "搜索位置"},
+	"export_data":      {"es": "Exportar datos", "en": "Export data", "zh": "导出数据"},
+	"export_json":      {"es": "Exportar JSON", "en": "Export JSON", "zh": "导出 JSON"},
+	"export_csv":       {"es": "Exportar CSV", "en": "Export CSV", "zh": "导出 CSV"},
+	"close":            {"es": "Cerrar", "en": "Close", "zh": "关闭"},
+	"export":           {"es": "Exportar", "en": "Export", "zh": "导出"},
+	"json_saved":       {"es": "JSON guardado", "en": "JSON saved", "zh": "JSON 已保存"},
+	"csv_saved":        {"es": "CSV guardado", "en": "CSV saved", "zh": "CSV 已保存"},
+	"search_title":     {"es": "Buscar ubicación", "en": "Search location", "zh": "搜索位置"},
+	"city_ph":          {"es": "Ciudad, país...", "en": "City, country...", "zh": "城市，国家..."},
+	"search_btn":       {"es": "Buscar", "en": "Search", "zh": "搜索"},
+	"searching":        {"es": "Buscando...", "en": "Searching...", "zh": "搜索中..."},
+	"no_results":       {"es": "Sin resultados", "en": "No results", "zh": "无结果"},
+	"cancel":           {"es": "Cancelar", "en": "Cancel", "zh": "取消"},
+	"results":          {"es": "resultado(s):", "en": "result(s):", "zh": "个结果："},
+	"reminder_title":   {"es": "Recordatorio", "en": "Reminder", "zh": "提醒"},
+	"drink_title":      {"es": "Bebe Agua!", "en": "Drink Water!", "zh": "喝水！"},
+	"today_progress":   {"es": "Hoy: %d / %d ml (%.0f%%)", "en": "Today: %d / %d ml (%.0f%%)", "zh": "今日：%d / %d 毫升（%.0f%%）"},
+	"add_water":        {"es": "Agregar agua:", "en": "Add water:", "zh": "添加水："},
+	"snooze":           {"es": "Posponer:", "en": "Snooze:", "zh": "稍后提醒："},
+	"close_btn":        {"es": "Cerrar", "en": "Close", "zh": "关闭"},
+	"notify_title":     {"es": "Bebe Agua!", "en": "Drink Water!", "zh": "喝水！"},
+	"notify_body":      {"es": "Es hora de hidratarte!", "en": "Time to hydrate!", "zh": "该喝水了！"},
+	"settings_menu":    {"es": "Configuración", "en": "Settings", "zh": "设置"},
+	"show_window":      {"es": "Mostrar ventana", "en": "Show window", "zh": "显示窗口"},
+	"hide_tray":        {"es": "Minimizar a bandeja", "en": "Hide to tray", "zh": "最小化到托盘"},
+	"quit":             {"es": "Salir", "en": "Quit", "zh": "退出"},
+}
+
+func T(key string) string {
+	if m, ok := translations[key]; ok {
+		if s, ok := m[currentLang]; ok {
+			return s
+		}
+		return m["es"]
+	}
+	return key
+}
+
+// ----------------------------------------------------------------
 type Mood int
 
 const (
@@ -125,6 +196,7 @@ func NewHydrapotionApp(a fyne.App) *HydrapotionApp {
 	}
 
 	h.loadSettings()
+	currentLang = h.settings.Language
 	h.loadHistory()
 	h.resetIfNewDay()
 
@@ -359,6 +431,22 @@ func (h *HydrapotionApp) GetWeeklyData() []HistoryEntry {
 	return result
 }
 
+func (h *HydrapotionApp) writeStatusFile() {
+	c, g, p, _ := h.GetProgress()
+
+	h.mu.RLock()
+	mood := h.settings.CurrentMood.String()
+	h.mu.RUnlock()
+
+	data, _ := json.Marshal(map[string]interface{}{
+		"consumed": c,
+		"goal":     g,
+		"percent":  math.Round(p*10) / 10,
+		"mood":     mood,
+	})
+	os.WriteFile(h.dataFile("status.json"), data, 0644)
+}
+
 func searchLocation(query string) ([]GeoResult, error) {
 	encoded := url.QueryEscape(query)
 	apiURL := fmt.Sprintf("https://geocoding-api.open-meteo.com/v1/search?name=%s&count=5&language=es&format=json", encoded)
@@ -421,19 +509,68 @@ func (h *HydrapotionApp) fetchWeather() {
 	}
 }
 
+func (h *HydrapotionApp) dynamicInterval() time.Duration {
+	base := time.Duration(h.settings.ReminderInterval) * time.Second
+	if base <= 0 {
+		base = 2 * time.Hour
+	}
+
+	hour := time.Now().Hour()
+	var timeFactor float64
+	switch {
+	case hour >= 6 && hour < 12:
+		timeFactor = 0.8
+	case hour >= 12 && hour < 18:
+		timeFactor = 0.7
+	case hour >= 18 && hour < 22:
+		timeFactor = 1.0
+	default:
+		timeFactor = 2.0
+	}
+
+	weatherFactor := 1.0
+	if h.weather != nil {
+		switch {
+		case h.weather.Temperature >= 35:
+			weatherFactor = 0.5
+		case h.weather.Temperature >= 30:
+			weatherFactor = 0.6
+		case h.weather.Temperature >= 25:
+			weatherFactor = 0.8
+		}
+		if h.weather.Humidity > 70 {
+			weatherFactor *= 0.9
+		}
+	}
+
+	factor := timeFactor * weatherFactor
+	if factor < 0.5 {
+		factor = 0.5
+	}
+
+	d := time.Duration(float64(base) * factor)
+	if d < 30*time.Minute {
+		d = 30 * time.Minute
+	}
+	if d > 6*time.Hour {
+		d = 6 * time.Hour
+	}
+	return d
+}
+
 func (h *HydrapotionApp) startReminderTimer() {
 	if h.reminder != nil {
 		h.reminder.Stop()
 	}
 
-	duration := time.Duration(h.settings.ReminderInterval) * time.Second
+	duration := h.dynamicInterval()
 	h.reminder = time.AfterFunc(duration, func() {
 		fyne.Do(func() { h.showReminderPopup() })
 	})
 }
 
 func (h *HydrapotionApp) showReminderPopup() {
-	notifySend("Bebe Agua!", "Es hora de hidratarte!")
+	notifySend(T("notify_title"), T("notify_body"))
 
 	if h.reminderWin != nil {
 		ui := h.CreateReminderUI()
@@ -443,7 +580,7 @@ func (h *HydrapotionApp) showReminderPopup() {
 		return
 	}
 
-	h.reminderWin = h.app.NewWindow("Recordatorio")
+	h.reminderWin = h.app.NewWindow(T("reminder_title"))
 	h.reminderWin.Resize(fyne.NewSize(350, 400))
 
 	ui := h.CreateReminderUI()
@@ -455,10 +592,10 @@ func (h *HydrapotionApp) showReminderPopup() {
 func (h *HydrapotionApp) CreateReminderUI() fyne.CanvasObject {
 	consumed, goal, percent, _ := h.GetProgress()
 
-	title := widget.NewLabelWithStyle("Bebe Agua!", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
+	title := widget.NewLabelWithStyle(T("drink_title"), fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
 	title.Importance = widget.HighImportance
 
-	progressText := widget.NewLabel(fmt.Sprintf("Hoy: %d / %d ml (%.0f%%)", consumed, goal, percent))
+	progressText := widget.NewLabel(fmt.Sprintf(T("today_progress"), consumed, goal, percent))
 	progressBar := widget.NewProgressBar()
 	progressBar.Min = 0
 	progressBar.Max = 100
@@ -483,18 +620,18 @@ func (h *HydrapotionApp) CreateReminderUI() fyne.CanvasObject {
 	)
 
 	snoozeContainer := container.NewGridWithColumns(3,
-		widget.NewButton("5 min", func() {
+		widget.NewButton("5 "+T("min"), func() {
 			h.snoozeReminder(5)
 		}),
-		widget.NewButton("15 min", func() {
+		widget.NewButton("15 "+T("min"), func() {
 			h.snoozeReminder(15)
 		}),
-		widget.NewButton("30 min", func() {
+		widget.NewButton("30 "+T("min"), func() {
 			h.snoozeReminder(30)
 		}),
 	)
 
-	closeBtn := widget.NewButton("Cerrar", func() {
+	closeBtn := widget.NewButton(T("close_btn"), func() {
 		h.closeReminderWindow()
 	})
 
@@ -504,10 +641,10 @@ func (h *HydrapotionApp) CreateReminderUI() fyne.CanvasObject {
 		progressText,
 		progressBar,
 		widget.NewSeparator(),
-		widget.NewLabel("Agregar agua:"),
+		widget.NewLabel(T("add_water")),
 		addWaterContainer,
 		widget.NewSeparator(),
-		widget.NewLabel("Posponer:"),
+		widget.NewLabel(T("snooze")),
 		snoozeContainer,
 		layout.NewSpacer(),
 		closeBtn,
@@ -528,6 +665,7 @@ func (h *HydrapotionApp) closeReminderWindow() {
 	if h.reminderWin != nil {
 		h.reminderWin.Hide()
 	}
+	h.startReminderTimer()
 }
 
 func notifySend(title, message string) {
@@ -991,10 +1129,10 @@ func (ch *WaterChart) CreateRenderer() fyne.WidgetRenderer {
 	y0 := canvas.NewText("0", color.RGBA{180, 180, 195, 255})
 	y0.TextSize = 11
 
-	yGoal := canvas.NewText("Meta", color.RGBA{220, 80, 80, 255})
+	yGoal := canvas.NewText(T("goal"), color.RGBA{220, 80, 80, 255})
 	yGoal.TextSize = 11
 
-	avgLbl := canvas.NewText("Prom", color.RGBA{240, 200, 60, 255})
+	avgLbl := canvas.NewText(T("avg"), color.RGBA{240, 200, 60, 255})
 	avgLbl.TextSize = 11
 
 	objs := []fyne.CanvasObject{rast, y0, yGoal, avgLbl}
@@ -1077,7 +1215,7 @@ func (r *chartRender) Layout(s fyne.Size) {
 		canvas.Refresh(r.avgLbl)
 	}
 
-	dayNames := []string{"Dom", "Lun", "Mar", "Mie", "Jue", "Vie", "Sab"}
+	dayNames := []string{T("sun"), T("mon"), T("tue"), T("wed"), T("thu"), T("fri"), T("sat")}
 	for i, e := range r.chart.data {
 		if i >= len(r.days) {
 			break
@@ -1229,43 +1367,58 @@ func (h *HydrapotionApp) CreateMainUI() fyne.CanvasObject {
 	})
 	grid := container.NewGridWrap(fyne.NewSize(100, 100), c1, c2, c3)
 
-	moodOpts := []string{"😊 Bien", "😐 Neutral", "😞 Bajo", "😰 Tenso"}
-	moodSel := widget.NewSelect(moodOpts, func(s string) {
-		var m Mood
-		// Strip emoji prefix to get mood name
-		parts := strings.SplitN(s, " ", 2)
-		name := parts[1]
-		switch name {
-		case "Bien":
-			m = MoodWell
-		case "Neutral":
-			m = MoodNeutral
-		case "Bajo":
-			m = MoodLow
-		case "Tenso":
-			m = MoodTense
-		}
-		h.SetMood(m)
-	})
-	for _, opt := range moodOpts {
-		if strings.Contains(opt, h.settings.CurrentMood.String()) {
-			moodSel.SetSelected(opt)
-			break
-		}
+	moodOpts := []string{
+		"😊 " + T("mood_well"),
+		"😐 " + T("mood_neutral"),
+		"😞 " + T("mood_low"),
+		"😰 " + T("mood_tense"),
 	}
+	moodSel := widget.NewSelect(moodOpts, func(s string) {
+		for i, opt := range moodOpts {
+			if opt == s {
+				h.SetMood(Mood(i))
+				break
+			}
+		}
+	})
+	moodSel.SetSelected(moodOpts[h.settings.CurrentMood])
 
 	moodRow := container.NewHBox(
-		widget.NewLabel("Estado mental:"),
+		widget.NewLabel(T("mood")),
 		layout.NewSpacer(),
 		moodSel,
 	)
 
 	gear := widget.NewButtonWithIcon("", theme.MenuIcon(), func() { h.showSettings() })
 
+	langs := []string{"es", "en", "zh"}
+	langNames := []string{"🇪🇸", "🇬🇧", "🇨🇳"}
+	langIdx := 0
+	for i, l := range langs {
+		if h.settings.Language == l {
+			langIdx = i
+			break
+		}
+	}
+	langBtn := widget.NewButton(langNames[langIdx], func() {
+		cur := 0
+		for i, l := range langs {
+			if h.settings.Language == l {
+				cur = (i + 1) % len(langs)
+				break
+			}
+		}
+		h.setLang(langs[cur])
+	})
+
+	minBtn := widget.NewButton("—", func() {
+		h.mainWindow.Hide()
+	})
+
 	titleRow := container.NewHBox(
 		widget.NewLabelWithStyle("Hydrapotion", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		layout.NewSpacer(),
-		gear,
+		minBtn, langBtn, gear,
 	)
 
 	secTitle := func(t string) fyne.CanvasObject {
@@ -1283,12 +1436,13 @@ func (h *HydrapotionApp) CreateMainUI() fyne.CanvasObject {
 		circ.Goal = g
 		circ.Refresh()
 		chart.SetData(h.GetWeeklyData(), h.CalculateGoal())
+		h.writeStatusFile()
 	}
 	h.onUpdate()
 
 	body := container.NewVBox(
 		circ,
-		container.NewCenter(secTitle("¿Cuánto vas a tomar?")),
+		container.NewCenter(secTitle(T("how_much"))),
 		container.NewCenter(container.NewPadded(grid)),
 		container.NewPadded(chart),
 	)
@@ -1302,27 +1456,36 @@ func (h *HydrapotionApp) CreateMainUI() fyne.CanvasObject {
 }
 
 // ----------------------------------------------------------------
-// Settings dialog
+// Language
 // ----------------------------------------------------------------
-func (h *HydrapotionApp) showSettings() {
-	if h.settingsWin != nil {
-		h.settingsWin.Show()
-		h.settingsWin.RequestFocus()
+func (h *HydrapotionApp) setLang(l string) {
+	if h.settings.Language == l {
 		return
 	}
+	h.settings.Language = l
+	h.saveSettings()
+	currentLang = l
 
-	d := h.app.NewWindow("Configuración")
-	d.Resize(fyne.NewSize(360, 440))
-	h.settingsWin = d
+	if h.settingsWin != nil {
+		h.settingsWin.Hide()
+	}
 
-	d.SetCloseIntercept(func() {
-		d.Hide()
-	})
+	h.rebuildUI()
+}
 
+func (h *HydrapotionApp) rebuildUI() {
+	content := container.NewPadded(h.CreateMainUI())
+	h.mainWindow.SetContent(content)
+}
+
+// ----------------------------------------------------------------
+// Settings dialog
+// ----------------------------------------------------------------
+func (h *HydrapotionApp) buildSettingsContent(d fyne.Window) fyne.CanvasObject {
 	wEntry := widget.NewEntry()
-	wEntry.SetPlaceHolder("Peso en kg")
+	wEntry.SetPlaceHolder(T("weight_ph"))
 	wEntry.SetText(fmt.Sprintf("%d", h.settings.Weight))
-	wBtn := widget.NewButton("Guardar", func() {
+	wBtn := widget.NewButton(T("save"), func() {
 		var v int
 		fmt.Sscanf(wEntry.Text, "%d", &v)
 		if v > 0 {
@@ -1331,9 +1494,9 @@ func (h *HydrapotionApp) showSettings() {
 	})
 
 	hEntry := widget.NewEntry()
-	hEntry.SetPlaceHolder("Altura en cm")
+	hEntry.SetPlaceHolder(T("height_ph"))
 	hEntry.SetText(fmt.Sprintf("%d", h.settings.Height))
-	hBtn := widget.NewButton("Guardar", func() {
+	hBtn := widget.NewButton(T("save"), func() {
 		var v int
 		fmt.Sscanf(hEntry.Text, "%d", &v)
 		if v > 0 {
@@ -1341,32 +1504,40 @@ func (h *HydrapotionApp) showSettings() {
 		}
 	})
 
-	curMin := h.settings.ReminderInterval / 60
-	ivSel := widget.NewSelect(
-		[]string{"5 min", "10 min", "15 min", "30 min", "45 min", "60 min"},
-		func(s string) {
-			var m int
-			fmt.Sscanf(s, "%d", &m)
-			h.SetReminderInterval(m * 60)
-		},
-	)
-	ivSel.SetSelected(fmt.Sprintf("%d min", curMin))
+	intervalOpts := []string{"1 " + T("hr"), "1.5 " + T("hr"), "2 " + T("hr"), "2.5 " + T("hr"), "3 " + T("hr")}
+	intervalVals := []int{3600, 5400, 7200, 9000, 10800}
+	curSec := h.settings.ReminderInterval
+	curIdx := 2 // default 2h
+	for i, v := range intervalVals {
+		if curSec == v {
+			curIdx = i
+			break
+		}
+	}
+	ivSel := widget.NewSelect(intervalOpts, func(s string) {
+		for i, opt := range intervalOpts {
+			if opt == s {
+				h.SetReminderInterval(intervalVals[i])
+				break
+			}
+		}
+	})
+	ivSel.SetSelected(intervalOpts[curIdx])
 
-	locLabel := widget.NewLabel("No configurada")
+	locLabel := widget.NewLabel(T("not_set"))
 	locLabel.Wrapping = fyne.TextWrapWord
 	if h.settings.LocationName != "" {
 		t := h.settings.LocationName
 		if h.weather != nil {
-			t += fmt.Sprintf(" — %.1f°C %d%% HR", h.weather.Temperature, int(h.weather.Humidity))
+			t += fmt.Sprintf(" — %.1f°C %d%% RH", h.weather.Temperature, int(h.weather.Humidity))
 		}
 		locLabel.SetText(t)
 	}
-	locBtn := widget.NewButton("Buscar ubicación", func() {
+	locBtn := widget.NewButton(T("search_location"), func() {
 		h.showLocationDialog()
-		d.Hide()
 	})
 
-	closeBtn := widget.NewButton("Cerrar", func() { d.Hide() })
+	closeBtn := widget.NewButton(T("close"), func() { d.Hide() })
 
 	sec := func(t string) fyne.CanvasObject {
 		l := widget.NewLabelWithStyle(t, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
@@ -1374,29 +1545,46 @@ func (h *HydrapotionApp) showSettings() {
 		return l
 	}
 
-	c := container.NewVBox(
-		sec("Peso"),
+	return container.NewVBox(
+		sec(T("weight")),
 		container.NewHBox(wEntry, wBtn),
 		widget.NewSeparator(),
-		sec("Altura"),
+		sec(T("height")),
 		container.NewHBox(hEntry, hBtn),
 		widget.NewSeparator(),
-		sec("Recordatorio"),
+		sec(T("reminder")),
 		ivSel,
 		widget.NewSeparator(),
-		sec("Ubicación"),
+		sec(T("location")),
 		locLabel,
 		locBtn,
 		widget.NewSeparator(),
-		sec("Exportar datos"),
-		widget.NewButton("Exportar JSON", func() { h.exportJSON(d) }),
-		widget.NewButton("Exportar CSV", func() { h.exportCSV(d) }),
+		sec(T("export_data")),
+		widget.NewButton(T("export_json"), func() { h.exportJSON(d) }),
+		widget.NewButton(T("export_csv"), func() { h.exportCSV(d) }),
 		layout.NewSpacer(),
 		widget.NewSeparator(),
 		closeBtn,
 	)
+}
 
-	d.SetContent(container.NewPadded(c))
+func (h *HydrapotionApp) showSettings() {
+	if h.settingsWin != nil {
+		h.settingsWin.SetContent(container.NewPadded(h.buildSettingsContent(h.settingsWin)))
+		h.settingsWin.Show()
+		h.settingsWin.RequestFocus()
+		return
+	}
+
+	d := h.app.NewWindow(T("settings_title"))
+	d.Resize(fyne.NewSize(360, 440))
+	h.settingsWin = d
+
+	d.SetCloseIntercept(func() {
+		d.Hide()
+	})
+
+	d.SetContent(container.NewPadded(h.buildSettingsContent(d)))
 	d.Show()
 }
 
@@ -1404,28 +1592,28 @@ func (h *HydrapotionApp) showSettings() {
 // Location search dialog
 // ----------------------------------------------------------------
 func (h *HydrapotionApp) showLocationDialog() {
-	d := h.app.NewWindow("Buscar ubicación")
+	d := h.app.NewWindow(T("search_title"))
 	d.Resize(fyne.NewSize(380, 320))
 
 	entry := widget.NewEntry()
-	entry.SetPlaceHolder("Ciudad, país...")
+	entry.SetPlaceHolder(T("city_ph"))
 	status := widget.NewLabel("")
 	resBox := container.NewVBox()
 
-	search := widget.NewButton("Buscar", func() {
+	search := widget.NewButton(T("search_btn"), func() {
 		if entry.Text == "" {
 			return
 		}
-		status.SetText("Buscando...")
+		status.SetText(T("searching"))
 		resBox.RemoveAll()
 		go func() {
 			results, err := searchLocation(entry.Text)
 			fyne.Do(func() {
 				if err != nil || len(results) == 0 {
-					status.SetText("Sin resultados")
+					status.SetText(T("no_results"))
 					return
 				}
-				status.SetText(fmt.Sprintf("%d resultado(s):", len(results)))
+				status.SetText(fmt.Sprintf("%d %s", len(results), T("results")))
 				for _, r := range results {
 					rr := r
 					btn := widget.NewButton(
@@ -1449,7 +1637,7 @@ func (h *HydrapotionApp) showLocationDialog() {
 			entry, search, widget.NewSeparator(),
 			status, resBox,
 			layout.NewSpacer(),
-			widget.NewButton("Cancelar", func() { d.Close() }),
+			widget.NewButton(T("cancel"), func() { d.Close() }),
 		),
 	))
 	d.Show()
@@ -1474,7 +1662,7 @@ func (h *HydrapotionApp) exportJSON(w fyne.Window) {
 		}
 		defer wc.Close()
 		wc.Write(data)
-		dialog.ShowInformation("Exportar", "JSON guardado", w)
+		dialog.ShowInformation(T("export"), T("json_saved"), w)
 	}, w)
 }
 
@@ -1483,7 +1671,7 @@ func (h *HydrapotionApp) exportCSV(w fyne.Window) {
 	defer h.mu.RUnlock()
 
 	var buf bytes.Buffer
-	buf.WriteString("Fecha,ml,Estado de animo\n")
+	buf.WriteString("Date,ml,Mood\n")
 	for _, e := range h.history {
 		mood := e.Mood
 		if mood == "" {
@@ -1498,7 +1686,7 @@ func (h *HydrapotionApp) exportCSV(w fyne.Window) {
 		}
 		defer wc.Close()
 		wc.Write(buf.Bytes())
-		dialog.ShowInformation("Exportar", "CSV guardado", w)
+		dialog.ShowInformation(T("export"), T("csv_saved"), w)
 	}, w)
 }
 
@@ -1512,15 +1700,16 @@ func (h *HydrapotionApp) setupSystemTray() {
 			fyne.NewMenuItem("250ml", func() { h.AddWater(250) }),
 			fyne.NewMenuItem("500ml", func() { h.AddWater(500) }),
 			fyne.NewMenuItemSeparator(),
-			fyne.NewMenuItem("Configuración", func() { h.showSettings() }),
+			fyne.NewMenuItem(T("settings_menu"), func() { h.showSettings() }),
+			fyne.NewMenuItem(T("hide_tray"), func() { h.mainWindow.Hide() }),
 			fyne.NewMenuItemSeparator(),
-			fyne.NewMenuItem("Mostrar ventana", func() {
+			fyne.NewMenuItem(T("show_window"), func() {
 				if h.mainWindow != nil {
 					h.mainWindow.Show()
 					h.mainWindow.RequestFocus()
 				}
 			}),
-			fyne.NewMenuItem("Salir", func() { h.app.Quit() }),
+			fyne.NewMenuItem(T("quit"), func() { h.app.Quit() }),
 		)
 		desk.SetSystemTrayMenu(m)
 	}

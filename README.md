@@ -14,7 +14,7 @@ Desktop hydration tracker — smart, personal, medical-grade logging.
 - **Mood tracking** — log mood per day (😊 Bien, 😐 Neutral, 😞 Bajo, 😰 Tenso)
 - **Dark theme** — clean dark UI, easy on the eyes
 - **System tray** — minimize to tray, quick-add from context menu
-- **Reminders** — configurable (5–60 min) popup with snooze
+- **Smart reminders** — dynamic interval adapting to time-of-day (×0.7 afternoon, ×2.0 night) and weather (×0.5 if ≥35°C). Configurable base: 1h–3h.
 - **Weather** — auto-fetches temperature & humidity via Open-Meteo
 - **Export** — CSV (`Fecha,ml,Estado de animo`) & JSON for doctor visits
 - **Sound effects** — ASMR keyboard sounds on interaction
