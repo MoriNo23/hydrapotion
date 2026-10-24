@@ -11,6 +11,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Necesario para que softprops/action-gh-release suba el binario al release
+    # (el default del repo es Contents: read)
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
