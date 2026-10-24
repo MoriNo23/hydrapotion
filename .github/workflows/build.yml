@@ -29,7 +29,8 @@ jobs:
           sudo apt-get install -y -qq libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev libegl-dev
 
       - name: Build
-        run: go build -o hydrapotion -ldflags="-s -w" .
+        # estampa la versión del tag (releases) o de la rama en --version
+        run: go build -o hydrapotion -ldflags="-s -w -X main.version=${{ github.ref_name }}" .
 
       - name: Test
         run: go test ./...
