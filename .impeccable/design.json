@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-24T09:40:00Z",
+  "title": "Design System: Hydrapotion — Hidrógrafo (informe hidrológico USGS)",
+  "extensions": {
+    "colorMeta": {
+      "paper":      { "role": "neutral",  "displayName": "Papel hueso",     "canonical": "#F5F1E6" },
+      "panel":      { "role": "neutral",  "displayName": "Papel de panel",  "canonical": "#ECE7D8" },
+      "ink":        { "role": "primary",  "displayName": "Tinta férrea",    "canonical": "#22313A" },
+      "ink-muted":  { "role": "neutral",  "displayName": "Tinta desvanecida", "canonical": "#5C6A64" },
+      "hydro":      { "role": "primary",  "displayName": "Azul-hidro",      "canonical": "#1F5F7A",
+                      "tonalRamp": ["#1F5F7A", "#2D6E8E", "#4A8AA6", "#E0E8EA"] },
+      "hydro-wash": { "role": "neutral",  "displayName": "Lavado de hover", "canonical": "#E0E8EA" },
+      "vermilion":  { "role": "secondary", "displayName": "Vermellón de sello", "canonical": "#A63E28" },
+      "moss":       { "role": "secondary", "displayName": "Verde musgo",     "canonical": "#4A7C59" },
+      "amber":      { "role": "secondary", "displayName": "Ámbar de promedio", "canonical": "#7E5A18" },
+      "hairline":   { "role": "neutral",  "displayName": "Filete de regla", "canonical": "#D9D2BD" },
+      "rule":       { "role": "neutral",  "displayName": "Regla media",     "canonical": "#8A8271" }
+    },
+    "typographyMeta": {
+      "reading": { "displayName": "Lectura de aforo", "purpose": "Cifra principal del hidrógrafo; siempre monoespaciada tabular." },
+      "label":   { "displayName": "Etiqueta de eje/sello", "purpose": "Ejes, sellos y códigos; mono 10." },
+      "section": { "displayName": "Encabezado de sección", "purpose": "MAYÚSCULAS + bold + filete debajo; sin kickers." },
+      "body":    { "displayName": "Texto de UI", "purpose": "Etiquetas y controles estándar; sans workhorse." }
+    },
+    "shadows": [
+      { "name": "overlay-only", "value": "sombra estándar Fyne, solo en menús/overlays", "purpose": "Sistema plano de tinta sobre papel; sin halos ni offset duro." }
+    ],
+    "motion": [
+      { "name": "redraw-on-data", "value": "sin animación; redibujado de raster al cambiar datos", "purpose": "Superficie Operate: el movimiento comunica cambio de dato, nada más." }
+    ],
+    "breakpoints": [
+      { "name": "window", "value": "360x580 fijo (SetFixedSize)" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Celda de registro",
+      "kind": "button",
+      "refersTo": "report-cell",
+      "description": "Celda de informe de un toque (150/250/500 ml); borde de regla, radio 0, glifo y cifra en tinta/azul-hidro.",
+      "html": "<button class=\"ds-cell\"><img alt=\"\" src=\"glyph.png\"><span>250 ml</span></button>",
+      "css": ".ds-cell { background: transparent; border: 1px solid #8A8271; border-radius: 0; color: #22313A; font-family: monospace; font-weight: 700; font-size: 13px; } .ds-cell:hover { background: #E0E8EA; border-color: #1F5F7A; }"
+    },
+    {
+      "name": "Panel hidrógrafo",
+      "kind": "card",
+      "refersTo": "hydrograph-panel",
+      "description": "Panel firma: curva escalonada de ingesta acumulada vs línea de capacidad punteada, lectura mono y sello de clima.",
+      "html": "<div class=\"ds-hydro\"><div class=\"ds-read\">1250 / 2750 ml · 45%</div><div class=\"ds-stamp\">CLIMA +200</div><canvas></canvas></div>",
+      "css": ".ds-hydro { background: #ECE7D8; border: 1px solid #8A8271; border-radius: 0; } .ds-read { color: #22313A; font-family: monospace; font-weight: 700; font-size: 15px; } .ds-stamp { color: #A63E28; border: 1px solid #A63E28; font-family: monospace; font-weight: 700; font-size: 10px; }"
+    },
+    {
+      "name": "Encabezado de sección",
+      "kind": "custom",
+      "refersTo": "section",
+      "description": "Versalitas bold con filete de regla debajo; sin kickers ni numeración.",
+      "html": "<div class=\"ds-section\">REGISTRO RÁPIDO</div>",
+      "css": ".ds-section { color: #22313A; font-weight: 700; font-size: 14px; text-transform: uppercase; border-bottom: 1px solid #D9D2BD; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Hidrógrafo — la estación de aforo personal",
+    "overview": "Cada día es una hoja de datos de estación: papel hueso, tinta férrea, una sola curva de agua trazada con honestidad contra su línea de capacidad. Los controles son celdas de informe, no botones de app; el clima deja sello, no decoración. La calma del papel alrededor del trazado es parte del sistema, no espacio desperdiciado.",
+    "keyCharacteristics": [
+      "Curva escalonada de aforo como widget firma",
+      "Numeración monoespaciada tabular para toda cifra",
+      "Filetes de 1 px y radio 0 en superficies del informe",
+      "Vermellón solo con significado (sello, capacidad, sobrellenado)"
+    ],
+    "rules": [
+      { "name": "Un color de agua", "body": "Todo dato de agua es azul-hidro #1F5F7A; ningún segundo color de datos.", "section": "colors" },
+      { "name": "El peso manda", "body": "La jerarquía se lleva con peso y caja (versalitas), nunca con un zoo de tamaños.", "section": "typography" },
+      { "name": "Papel quieto", "body": "Un trazado por panel; el vacío de papel alrededor es intencional.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do componer cifras en monoespaciada tabular",
+      "Do mantener radio 0 y filetes de 1 px en celdas y paneles",
+      "Do dejar el hover como lavado de papel #E0E8EA con borde azul-hidro"
+    ],
+    "donts": [
+      "Don't anillos de progreso, tarjetas SaaS redondeadas ni gotitas de caricatura",
+      "Don't emojis como iconos; los glifos se dibujan",
+      "Don't monoespaciada en prosa; solo datos y medidas",
+      "Don't vermellón decorativo; solo sello, capacidad o sobrellenado"
+    ]
+  }
+}

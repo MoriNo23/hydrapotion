@@ -11,8 +11,8 @@ Desktop hydration tracker — smart, personal, medical-grade logging.
 - **Quick logging** — 150ml / 250ml / 500ml one-click buttons
 - **Smart goal** — base 35ml/kg + mood bonus + weather bonus (temp, humidity)
 - **Weekly chart** — bar chart with goal line + weekly average, medical-grade visual
-- **Mood tracking** — log mood per day (😊 Bien, 😐 Neutral, 😞 Bajo, 😰 Tenso)
-- **Dark theme** — clean dark UI, easy on the eyes
+- **Mood tracking** — log mood per day (Bien / Neutral / Bajo / Tenso)
+- **USGS report UI ("Hidrógrafo")** — bone-paper gauging-station report: the day drawn as a stepped hydrograph vs a dashed capacity line, weather stamps, tabular mono numerals, 1px rules, zero-radius cells (see DESIGN.md)
 - **System tray** — minimize to tray, quick-add from context menu
 - **Smart reminders** — dynamic interval adapting to time-of-day (×0.7 afternoon, ×2.0 night) and weather (×0.5 if ≥35°C). Configurable base: 1h–3h.
 - **systemd timer mode (Linux)** — reminders run headless via `hydrapotion --remind` + systemd user timer: the GUI can stay closed and the reminder still fires (~10 MB, <1s per tick instead of a full GUI process resident in RAM)

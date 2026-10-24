@@ -7,13 +7,13 @@ import (
 	"image"
 	"image/color"
 	"io"
-	"math"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"time"
 
@@ -87,6 +87,10 @@ var translations = map[string]map[string]string{
 	"show_window":     {"es": "Mostrar ventana", "en": "Show window", "zh": "显示窗口"},
 	"hide_tray":       {"es": "Minimizar a bandeja", "en": "Hide to tray", "zh": "最小化到托盘"},
 	"quit":            {"es": "Salir", "en": "Quit", "zh": "退出"},
+	"quick_log":       {"es": "Registro rápido", "en": "Quick log", "zh": "快速记录"},
+	"weekly":          {"es": "Resumen semanal", "en": "Weekly summary", "zh": "每周概览"},
+	"climate":         {"es": "CLIMA", "en": "WEATHER", "zh": "天气"},
+	"no_traces":       {"es": "sin trazas horarias", "en": "no hourly traces", "zh": "无逐时记录"},
 }
 
 func T(key string) string {
@@ -137,9 +141,10 @@ type Settings struct {
 }
 
 type HistoryEntry struct {
-	Date string `json:"date"`
-	Ml   int    `json:"ml"`
-	Mood string `json:"mood,omitempty"`
+	Date string     `json:"date"`
+	Ml   int        `json:"ml"`
+	Mood string     `json:"mood,omitempty"`
+	Logs []WaterLog `json:"logs,omitempty"`
 }
 
 type WeatherData struct {
@@ -284,22 +289,28 @@ func (h *HydrapotionApp) CalculateGoal() int {
 		moodBonus = 200
 	}
 
-	weatherBonus := 0
-	if h.weather != nil {
-		switch {
-		case h.weather.Temperature >= 35:
-			weatherBonus = 600
-		case h.weather.Temperature >= 30:
-			weatherBonus = 400
-		case h.weather.Temperature >= 25:
-			weatherBonus = 200
-		}
-		if h.weather.Humidity > 60 {
-			weatherBonus += 100
-		}
-	}
+	return baseGoal + heightBonus + moodBonus + h.weatherBonus()
+}
 
-	return baseGoal + heightBonus + moodBonus + weatherBonus
+// weatherBonus suma ml según el clima (≥25° +200, ≥30° +400, ≥35° +600,
+// humedad >60% +100). Compartida por la meta y el sello del hidrógrafo.
+func (h *HydrapotionApp) weatherBonus() int {
+	if h.weather == nil {
+		return 0
+	}
+	b := 0
+	switch {
+	case h.weather.Temperature >= 35:
+		b = 600
+	case h.weather.Temperature >= 30:
+		b = 400
+	case h.weather.Temperature >= 25:
+		b = 200
+	}
+	if h.weather.Humidity > 60 {
+		b += 100
+	}
+	return b
 }
 
 func (h *HydrapotionApp) AddWater(ml int) {
@@ -309,15 +320,20 @@ func (h *HydrapotionApp) AddWater(ml int) {
 
 	today := h.todayStr()
 	found := false
+	now := time.Now().Format(time.RFC3339)
 	for i, entry := range h.history {
 		if entry.Date == today {
 			h.history[i].Ml += ml
+			h.history[i].Logs = append(h.history[i].Logs, WaterLog{At: now, Ml: ml})
 			found = true
 			break
 		}
 	}
 	if !found {
-		h.history = append(h.history, HistoryEntry{Date: today, Ml: ml})
+		h.history = append(h.history, HistoryEntry{
+			Date: today, Ml: ml,
+			Logs: []WaterLog{{At: now, Ml: ml}},
+		})
 	}
 
 	h.saveSettings()
@@ -440,6 +456,21 @@ func (h *HydrapotionApp) GetWeeklyData() []HistoryEntry {
 		}
 	}
 	return result
+}
+
+// TodayLogs devuelve una copia de los eventos intradía de hoy.
+func (h *HydrapotionApp) TodayLogs() []WaterLog {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	today := h.todayStr()
+	for _, entry := range h.history {
+		if entry.Date == today {
+			out := make([]WaterLog, len(entry.Logs))
+			copy(out, entry.Logs)
+			return out
+		}
+	}
+	return nil
 }
 
 func searchLocation(query string) ([]GeoResult, error) {
@@ -703,120 +734,8 @@ func playSound(soundPath string) {
 	cmd.Run()
 }
 
-// CircularProgress draws a ring chart with center text.
-type CircularProgress struct {
-	widget.BaseWidget
-	Percent     float64
-	Consumed    int
-	Goal        int
-	StrokeWidth float32
-}
-
-func NewCircularProgress() *CircularProgress {
-	c := &CircularProgress{StrokeWidth: 14}
-	c.ExtendBaseWidget(c)
-	return c
-}
-
-func (c *CircularProgress) CreateRenderer() fyne.WidgetRenderer {
-	rast := canvas.NewRaster(c.draw)
-	pct := canvas.NewText("0%", theme.ForegroundColor())
-	pct.Alignment = fyne.TextAlignCenter
-	pct.TextSize = 28
-	pct.TextStyle = fyne.TextStyle{Bold: true}
-
-	det := canvas.NewText("0 / 0 ml", theme.ForegroundColor())
-	det.Alignment = fyne.TextAlignCenter
-	det.TextSize = 13
-
-	return &circleRender{prog: c, rast: rast, pct: pct, det: det}
-}
-
-type circleRender struct {
-	prog *CircularProgress
-	rast *canvas.Raster
-	pct  *canvas.Text
-	det  *canvas.Text
-}
-
-func (r *circleRender) Layout(s fyne.Size) {
-	d := s.Width
-	if s.Height < d {
-		d = s.Height
-	}
-	r.rast.Resize(fyne.NewSize(d, d))
-	r.rast.Move(fyne.NewPos((s.Width-d)/2, 0))
-
-	r.pct.Resize(fyne.NewSize(d, 36))
-	r.pct.Move(fyne.NewPos((s.Width-d)/2, (d-50)/2))
-
-	r.det.Resize(fyne.NewSize(d, 20))
-	r.det.Move(fyne.NewPos((s.Width-d)/2, (d-50)/2+40))
-}
-
-func (r *circleRender) MinSize() fyne.Size { return fyne.NewSize(200, 200) }
-
-func (r *circleRender) Refresh() {
-	canvas.Refresh(r.rast)
-	r.pct.Text = fmt.Sprintf("%.0f%%", r.prog.Percent)
-	r.det.Text = fmt.Sprintf("%d / %d ml", r.prog.Consumed, r.prog.Goal)
-	canvas.Refresh(r.pct)
-	canvas.Refresh(r.det)
-}
-
-func (r *circleRender) Objects() []fyne.CanvasObject {
-	return []fyne.CanvasObject{r.rast, r.pct, r.det}
-}
-func (r *circleRender) Destroy() {}
-
-func (c *CircularProgress) draw(w, h int) image.Image {
-	size := w
-	if h < size {
-		size = h
-	}
-	if size < 10 {
-		size = 10
-	}
-	img := image.NewRGBA(image.Rect(0, 0, size, size))
-	cx := float64(size) / 2
-	sw := float64(c.StrokeWidth)
-	rad := cx - sw/2
-	fgC := color.RGBA{64, 169, 255, 255}
-	doneC := color.RGBA{46, 204, 113, 255}
-	ringC := color.RGBA{35, 35, 45, 255}
-
-	for y := 0; y < size; y++ {
-		for x := 0; x < size; x++ {
-			dx := float64(x) - cx
-			dy := float64(y) - cx
-			dist := math.Sqrt(dx*dx + dy*dy)
-			if dist < rad-sw/2 || dist > rad+sw/2 {
-				continue
-			}
-			a := math.Atan2(dy, dx)
-			if a < 0 {
-				a += 2 * math.Pi
-			}
-			a += math.Pi / 2
-			if a >= 2*math.Pi {
-				a -= 2 * math.Pi
-			}
-			pa := c.Percent / 100.0 * 2 * math.Pi
-			if a <= pa {
-				if c.Percent >= 100 {
-					img.Set(x, y, doneC)
-				} else {
-					img.Set(x, y, fgC)
-				}
-			} else {
-				img.Set(x, y, ringC)
-			}
-		}
-	}
-	return img
-}
-
-// WaterCard is a tappable card with pixel-drawn icon and ml label.
+// WaterCard es una celda de registro del informe: filete de tinta, sin radio,
+// glifo en azul-hidro y numeración mono. El hover tiñe con lavado de papel.
 type WaterCard struct {
 	widget.BaseWidget
 	ml      int
@@ -845,19 +764,18 @@ func (c *WaterCard) MouseOut() {
 func (c *WaterCard) MouseMoved(*desktop.MouseEvent) {}
 
 func (c *WaterCard) CreateRenderer() fyne.WidgetRenderer {
-	icon := canvas.NewImageFromImage(glassIcon(c.ml, 48, 64, theme.PrimaryColor()))
+	icon := canvas.NewImageFromImage(glassIcon(c.ml, 48, 64, repHydro))
 	icon.FillMode = canvas.ImageFillContain
-	icon.SetMinSize(fyne.NewSize(36, 48))
+	icon.SetMinSize(fyne.NewSize(36, 44))
 
-	ml := canvas.NewText(fmt.Sprintf("%dml", c.ml), theme.ForegroundColor())
+	ml := canvas.NewText(fmt.Sprintf("%d ml", c.ml), repInk)
 	ml.Alignment = fyne.TextAlignCenter
-	ml.TextSize = c.Theme().Size(theme.SizeNameText)
-	ml.TextStyle = fyne.TextStyle{Bold: true}
+	ml.TextSize = 13
+	ml.TextStyle = fyne.TextStyle{Monospace: true, Bold: true}
 
-	bg := canvas.NewRectangle(theme.Color(theme.ColorNameButton))
-	bg.StrokeColor = theme.Color(theme.ColorNameInputBorder)
+	bg := canvas.NewRectangle(color.Transparent)
+	bg.StrokeColor = repRule
 	bg.StrokeWidth = 1
-	bg.CornerRadius = c.Theme().Size(theme.SizeNameButtonRadius)
 
 	wrapped := container.NewMax(
 		bg,
@@ -891,24 +809,17 @@ func (r *cardRender) Layout(s fyne.Size) {
 	r.wrapped.Move(fyne.NewPos(0, 0))
 }
 
-func (r *cardRender) MinSize() fyne.Size { return fyne.NewSize(100, 100) }
+func (r *cardRender) MinSize() fyne.Size { return fyne.NewSize(96, 84) }
 
 func (r *cardRender) Refresh() {
-	th := r.card.Theme()
 	if r.card.hovered {
-		r.bg.FillColor = theme.PrimaryColor()
-		r.bg.CornerRadius = th.Size(theme.SizeNameButtonRadius)
-		r.icon.Image = glassIcon(r.card.ml, 48, 64, theme.BackgroundColor())
-		r.ml.Color = theme.BackgroundColor()
+		r.bg.FillColor = repWash
+		r.bg.StrokeColor = repHydro
 	} else {
-		r.bg.FillColor = theme.Color(theme.ColorNameButton)
-		r.bg.CornerRadius = th.Size(theme.SizeNameButtonRadius)
-		r.icon.Image = glassIcon(r.card.ml, 48, 64, theme.PrimaryColor())
-		r.ml.Color = theme.ForegroundColor()
+		r.bg.FillColor = color.Transparent
+		r.bg.StrokeColor = repRule
 	}
 	canvas.Refresh(r.bg)
-	canvas.Refresh(r.icon)
-	canvas.Refresh(r.ml)
 }
 
 func (r *cardRender) Objects() []fyne.CanvasObject { return []fyne.CanvasObject{r.wrapped} }
@@ -1120,20 +1031,24 @@ func (ch *WaterChart) CreateRenderer() fyne.WidgetRenderer {
 
 	dayLbls := make([]*canvas.Text, 7)
 	for i := range dayLbls {
-		t := canvas.NewText("", color.RGBA{180, 180, 195, 255})
-		t.TextSize = 11
+		t := canvas.NewText("", repInkMuted)
+		t.TextSize = 10
+		t.TextStyle = fyne.TextStyle{Monospace: true}
 		t.Alignment = fyne.TextAlignCenter
 		dayLbls[i] = t
 	}
 
-	y0 := canvas.NewText("0", color.RGBA{180, 180, 195, 255})
-	y0.TextSize = 11
+	y0 := canvas.NewText("0", repInkMuted)
+	y0.TextSize = 10
+	y0.TextStyle = fyne.TextStyle{Monospace: true}
 
-	yGoal := canvas.NewText(T("goal"), color.RGBA{220, 80, 80, 255})
-	yGoal.TextSize = 11
+	yGoal := canvas.NewText(T("goal"), repVermilion)
+	yGoal.TextSize = 10
+	yGoal.TextStyle = fyne.TextStyle{Monospace: true}
 
-	avgLbl := canvas.NewText(T("avg"), color.RGBA{240, 200, 60, 255})
-	avgLbl.TextSize = 11
+	avgLbl := canvas.NewText(T("avg"), repAmber)
+	avgLbl.TextSize = 10
+	avgLbl.TextStyle = fyne.TextStyle{Monospace: true}
 
 	objs := []fyne.CanvasObject{rast, y0, yGoal, avgLbl}
 	for _, d := range dayLbls {
@@ -1158,7 +1073,7 @@ type chartRender struct {
 }
 
 func (r *chartRender) Layout(s fyne.Size) {
-	const left, right, top, bottom = 50, 15, 20, 35
+	const left, right, top, bottom = 46, 12, 16, 28
 	chartW := s.Width - left - right
 	chartH := s.Height - top - bottom
 	if chartW < 10 || chartH < 10 {
@@ -1194,25 +1109,30 @@ func (r *chartRender) Layout(s fyne.Size) {
 	}
 
 	// Y=0 label
-	r.y0.Move(fyne.NewPos(4, s.Height-bottom-9))
-	r.y0.Resize(fyne.NewSize(left-8, 14))
+	r.y0.Move(fyne.NewPos(6, s.Height-bottom-9))
+	r.y0.Resize(fyne.NewSize(left-10, 14))
 
 	// Goal label + position
 	if r.chart.goal > 0 && maxVal > 0 {
 		r.yGoal.Text = fmt.Sprintf("%dml", r.chart.goal)
 		goalY := float32(float64(top) + float64(chartH)*(1-float64(r.chart.goal)/float64(maxVal)))
-		r.yGoal.Move(fyne.NewPos(4, goalY-7))
-		r.yGoal.Resize(fyne.NewSize(left-8, 14))
+		r.yGoal.Move(fyne.NewPos(6, goalY-7))
+		r.yGoal.Resize(fyne.NewSize(left-10, 14))
 		canvas.Refresh(r.yGoal)
 	}
 
-	// Avg label
+	// Avg label (oculto si cae sobre la línea base: colisión con el 0)
 	if r.chart.avg > 0 && maxVal > 0 {
-		r.avgLbl.Text = fmt.Sprintf("%dml", r.chart.avg)
 		avgY := float32(float64(top) + float64(chartH)*(1-float64(r.chart.avg)/float64(maxVal)))
-		r.avgLbl.Move(fyne.NewPos(4, avgY-7))
-		r.avgLbl.Resize(fyne.NewSize(left-8, 14))
-		canvas.Refresh(r.avgLbl)
+		if avgY >= s.Height-bottom-14 {
+			r.avgLbl.Hide()
+		} else {
+			r.avgLbl.Show()
+			r.avgLbl.Text = fmt.Sprintf("%dml", r.chart.avg)
+			r.avgLbl.Move(fyne.NewPos(6, avgY-7))
+			r.avgLbl.Resize(fyne.NewSize(left-10, 14))
+			canvas.Refresh(r.avgLbl)
+		}
 	}
 
 	dayNames := []string{T("sun"), T("mon"), T("tue"), T("wed"), T("thu"), T("fri"), T("sat")}
@@ -1233,7 +1153,7 @@ func (r *chartRender) Layout(s fyne.Size) {
 	}
 }
 
-func (r *chartRender) MinSize() fyne.Size { return fyne.NewSize(320, 160) }
+func (r *chartRender) MinSize() fyne.Size { return fyne.NewSize(320, 118) }
 
 func (r *chartRender) Refresh() {
 	canvas.Refresh(r.rast)
@@ -1245,19 +1165,20 @@ func (r *chartRender) Destroy() {}
 
 func (ch *WaterChart) draw(w, h int) image.Image {
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
-	bg := color.RGBA{25, 25, 38, 255}
-	gridC := color.RGBA{50, 50, 70, 255}
-	barC := color.RGBA{64, 169, 255, 200}
-	doneC := color.RGBA{46, 204, 113, 200}
-	goalLineC := color.RGBA{220, 80, 80, 200}
+	bg := repPanel
+	gridC := repHairline
+	barC := repHydro
+	doneC := repMoss
+	goalLineC := repVermilion
 
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
 			img.Set(x, y, bg)
 		}
 	}
+	repRectStroke(img, 0, 0, w-1, h-1, repRule)
 
-	const left, right, top, bottom = 50, 15, 20, 35
+	const left, right, top, bottom = 46, 12, 16, 28
 	chartW := w - left - right
 	chartH := h - top - bottom
 	if chartW < 10 || chartH < 10 {
@@ -1279,10 +1200,11 @@ func (ch *WaterChart) draw(w, h int) image.Image {
 		maxVal = 1000
 	}
 
-	// Baseline
-	for x := left; x < left+chartW; x++ {
-		img.Set(x, top+chartH, gridC)
+	// Retícula a cuartos + línea base.
+	for i := 1; i <= 3; i++ {
+		repHLine(img, left, left+chartW, top+chartH*i/4, gridC)
 	}
+	repHLine(img, left, left+chartW, top+chartH, repRule)
 
 	// Goal line (dashed)
 	if ch.goal > 0 && maxVal > 0 {
@@ -1304,9 +1226,7 @@ func (ch *WaterChart) draw(w, h int) image.Image {
 	if ch.avg > 0 && maxVal > 0 {
 		avgY := top + chartH - int(float64(ch.avg)/float64(maxVal)*float64(chartH))
 		if avgY >= top && avgY <= top+chartH {
-			for x := left; x < left+chartW; x += 6 {
-				img.Set(x, avgY, color.RGBA{240, 200, 60, 180})
-			}
+			repDashedHLine(img, left, left+chartW, avgY, 2, 4, repAmber)
 		}
 	}
 
@@ -1351,7 +1271,7 @@ func (ch *WaterChart) draw(w, h int) image.Image {
 // Main UI
 // ----------------------------------------------------------------
 func (h *HydrapotionApp) CreateMainUI() fyne.CanvasObject {
-	circ := NewCircularProgress()
+	hydro := NewHydrograph()
 
 	c1 := NewWaterCard(150, func() {
 		h.AddWater(150)
@@ -1365,13 +1285,13 @@ func (h *HydrapotionApp) CreateMainUI() fyne.CanvasObject {
 		h.AddWater(500)
 		playSound("add_water.wav")
 	})
-	grid := container.NewGridWrap(fyne.NewSize(100, 100), c1, c2, c3)
+	grid := container.NewGridWithColumns(3, c1, c2, c3)
 
 	moodOpts := []string{
-		"😊 " + T("mood_well"),
-		"😐 " + T("mood_neutral"),
-		"😞 " + T("mood_low"),
-		"😰 " + T("mood_tense"),
+		T("mood_well"),
+		T("mood_neutral"),
+		T("mood_low"),
+		T("mood_tense"),
 	}
 	moodSel := widget.NewSelect(moodOpts, func(s string) {
 		for i, opt := range moodOpts {
@@ -1389,10 +1309,9 @@ func (h *HydrapotionApp) CreateMainUI() fyne.CanvasObject {
 		moodSel,
 	)
 
-	gear := widget.NewButtonWithIcon("", theme.MenuIcon(), func() { h.showSettings() })
+	gear := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() { h.showSettings() })
 
 	langs := []string{"es", "en", "zh"}
-	langNames := []string{"🇪🇸", "🇬🇧", "🇨🇳"}
 	langIdx := 0
 	for i, l := range langs {
 		if h.settings.Language == l {
@@ -1400,7 +1319,7 @@ func (h *HydrapotionApp) CreateMainUI() fyne.CanvasObject {
 			break
 		}
 	}
-	langBtn := widget.NewButton(langNames[langIdx], func() {
+	langBtn := widget.NewButton(strings.ToUpper(langs[langIdx]), func() {
 		cur := 0
 		for i, l := range langs {
 			if h.settings.Language == l {
@@ -1415,39 +1334,38 @@ func (h *HydrapotionApp) CreateMainUI() fyne.CanvasObject {
 		h.mainWindow.Hide()
 	})
 
-	titleRow := container.NewHBox(
-		widget.NewLabelWithStyle("Hydrapotion", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		layout.NewSpacer(),
-		minBtn, langBtn, gear,
-	)
+	// Cabecera del informe: título en versalitas + fecha como id de estación.
+	title := widget.NewLabelWithStyle("HYDRAPOTION", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	station := widget.NewLabelWithStyle(time.Now().Format("2006-01-02"), fyne.TextAlignLeading, fyne.TextStyle{Monospace: true})
+	station.Importance = widget.LowImportance
+	header := container.NewHBox(title, station, layout.NewSpacer(), minBtn, langBtn, gear)
 
-	secTitle := func(t string) fyne.CanvasObject {
-		l := widget.NewLabelWithStyle(t, fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
-		l.Importance = widget.MediumImportance
-		return l
+	// Encabezados de sección con filete de regla debajo.
+	section := func(t string) fyne.CanvasObject {
+		l := widget.NewLabelWithStyle(strings.ToUpper(t), fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+		rule := canvas.NewLine(repHairline)
+		return container.NewVBox(l, rule)
 	}
 
 	chart := NewWaterChart()
 
 	h.onUpdate = func() {
-		c, g, p, _ := h.GetProgress()
-		circ.Percent = p
-		circ.Consumed = c
-		circ.Goal = g
-		circ.Refresh()
+		c, _, _, _ := h.GetProgress()
+		hydro.SetDay(h.TodayLogs(), c, h.CalculateGoal(), h.weatherBonus())
 		chart.SetData(h.GetWeeklyData(), h.CalculateGoal())
 	}
 	h.onUpdate()
 
 	body := container.NewVBox(
-		circ,
-		container.NewCenter(secTitle(T("how_much"))),
-		container.NewCenter(container.NewPadded(grid)),
-		container.NewPadded(chart),
+		hydro,
+		section(T("quick_log")),
+		container.NewCenter(grid),
+		section(T("weekly")),
+		chart,
 	)
 
 	return container.NewBorder(
-		container.NewPadded(titleRow),
+		container.NewPadded(header),
 		container.NewPadded(moodRow),
 		nil, nil,
 		body,
@@ -1729,14 +1647,17 @@ func main() {
 
 	a := app.NewWithID("hydrapotion")
 	w := a.NewWindow("Hydrapotion")
-	a.Settings().SetTheme(theme.DarkTheme())
+	a.Settings().SetTheme(newReportTheme())
 
 	h := NewHydrapotionApp(a)
 	h.mainWindow = w
-	h.setupSystemTray()
+	// HYDRAPOTION_NO_TRAY=1 omite la bandeja (capturas en X virtual sin dbus).
+	if os.Getenv("HYDRAPOTION_NO_TRAY") == "" {
+		h.setupSystemTray()
+	}
 
 	w.SetContent(container.NewPadded(h.CreateMainUI()))
-	w.Resize(fyne.NewSize(360, 540))
+	w.Resize(fyne.NewSize(360, 580))
 	w.SetFixedSize(true)
 	w.SetCloseIntercept(func() { w.Hide() })
 
