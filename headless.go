@@ -10,6 +10,7 @@ package main
 //
 //      hydrapotion --remind      → evalúa si toca notificar y sale (lo llama el systemd timer)
 //      hydrapotion add <ml>      → registra agua sin abrir la ventana
+//      hydrapotion electro <ml>  → registra una toma de electrolitos (sodio estimado)
 //      hydrapotion status        → progreso del día en texto plano
 //      hydrapotion --version     → versión
 //
@@ -26,6 +27,8 @@ import (
 	"runtime/debug"
 	"strconv"
 	"time"
+
+	"hydrapotion/internal/electro"
 )
 
 var version = "dev"
@@ -162,6 +165,18 @@ func runHeadless(args []string) bool {
 		}
 		runAdd(ml)
 		return true
+	case "electro":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "uso: hydrapotion electro <ml>   (ej: hydrapotion electro 250)")
+			os.Exit(2)
+		}
+		ml, err := strconv.Atoi(args[1])
+		if err != nil || ml <= 0 || ml > 10000 {
+			fmt.Fprintln(os.Stderr, "cantidad inválida:", args[1])
+			os.Exit(2)
+		}
+		runElectro(ml)
+		return true
 	case "status":
 		runStatus()
 		return true
@@ -215,10 +230,21 @@ func runAdd(ml int) {
 	fmt.Printf("+%d ml → %d/%d ml (%.0f%%)\n", ml, c, g, p)
 }
 
+// runElectro registra una toma de electrolitos arbitraria por CLI.
+// El sodio se estima con la concentración genérica (electro.NaPerMl).
+func runElectro(ml int) {
+	h := newHeadlessApp()
+	h.AddElectro(ml, electro.SodiumForMl(ml))
+	st := h.ElectroStats()
+	fmt.Printf("+%d ml electrolitos → %d ml · %d dosis · ~%d mg Na\n", ml, st.Ml, st.Dosis, st.Na)
+}
+
 func runStatus() {
 	h := newHeadlessApp()
 	c, g, p, w := h.GetProgress()
 	fmt.Printf("hidratación: %d/%d ml (%.0f%%)\n", c, g, p)
+	st := h.ElectroStats()
+	fmt.Printf("electrolitos: %d ml · %d/%d dosis · ~%d mg Na\n", st.Ml, st.Dosis, h.ElectroTarget(), st.Na)
 	if w != nil {
 		fmt.Printf("clima: %.1f°C, %d%% humedad\n", w.Temperature, int(w.Humidity))
 	}

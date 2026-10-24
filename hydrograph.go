@@ -20,9 +20,14 @@ import (
 )
 
 // WaterLog es un evento de ingesta intradía (RFC3339 + ml).
+// Kind vacío = agua (retrocompatible con history.json previos);
+// Kind "electro" = toma de electrolitos. Na guarda el sodio estimado (mg)
+// del evento, solo en tomas de electrolitos.
 type WaterLog struct {
-	At string `json:"at"`
-	Ml int    `json:"ml"`
+	At   string `json:"at"`
+	Ml   int    `json:"ml"`
+	Kind string `json:"kind,omitempty"`
+	Na   int    `json:"na,omitempty"`
 }
 
 // ---------- helpers de pixel (compartidos con el resumen semanal) ----------
@@ -71,10 +76,12 @@ func repRectStroke(img *image.RGBA, x0, y0, x1, y1 int, c color.Color) {
 // ---------- widget ----------
 
 // Hydrograph dibuja el día como curva de aforo: ingesta acumulada por hora
-// contra la meta (línea de capacidad), con sello de clima cuando hay bonus.
+// contra la meta (línea de capacidad), sello de clima cuando hay bonus y
+// marcas musgo sobre la línea base en cada toma de electrolitos.
 type Hydrograph struct {
 	widget.BaseWidget
 	logs     []WaterLog
+	electro  []WaterLog
 	consumed int
 	goal     int
 	bonus    int
@@ -117,9 +124,11 @@ func NewHydrograph() *Hydrograph {
 	return g
 }
 
-// SetDay alimenta el hidrógrafo con datos reales del día.
-func (g *Hydrograph) SetDay(logs []WaterLog, consumed, goal, bonus int) {
+// SetDay alimenta el hidrógrafo con datos reales del día. Los logs de agua
+// dibujan la curva; los de electrolitos solo marcan eventos sobre la base.
+func (g *Hydrograph) SetDay(logs, electro []WaterLog, consumed, goal, bonus int) {
 	g.logs = logs
+	g.electro = electro
 	g.consumed = consumed
 	g.goal = goal
 	g.bonus = bonus
@@ -332,6 +341,27 @@ func (g *Hydrograph) draw(w, h int) image.Image {
 		if pts[i].y != pts[i-1].y {
 			rise(pts[i].x, pts[i-1].y, pts[i].y)
 		}
+	}
+
+	// Marcas de electrolitos: ticks musgo sobre la línea base, uno por toma.
+	for _, l := range g.electro {
+		t, err := time.Parse(time.RFC3339, l.At)
+		if err != nil {
+			t, err = time.Parse("2006-01-02T15:04:05", l.At)
+		}
+		if err != nil {
+			continue
+		}
+		m := float64(t.Hour()*60+t.Minute()) / 1440.0
+		x := toX(m)
+		if x < left {
+			x = left
+		}
+		if x > left+plotW-2 {
+			x = left + plotW - 2
+		}
+		repVLine(img, x, top+plotH-6, top+plotH, repMoss)
+		repVLine(img, x+1, top+plotH-6, top+plotH, repMoss)
 	}
 
 	// Marca de sobrellenado: tramos de curva por encima de la capacidad.

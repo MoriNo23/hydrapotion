@@ -14,8 +14,13 @@ USGS-style hydrology report — one binary, no Electron, no account, no telemetr
 
 **Logging**
 - One-click 150 / 250 / 500 ml cards with intraday log (`history.json`)
-- CLI: `hydrapotion add 250` — log without opening the window
-- System tray with quick-add
+- Electrolytes too: four one-tap servings — isotonic drink, oral rehydration
+  solution, coconut water, broth — each with an estimated-sodium readout
+  (`x/y servings · ~z mg Na`); a daily reference of 2 servings (3 on ≥ 30 °C
+  days) and moss ticks on the hydrograph mark every serving
+- CLI: `hydrapotion add 250` for water, `hydrapotion electro 250` for
+  electrolytes — log without opening the window
+- System tray with quick-add (water + an electrolyte item)
 
 **Daily goal**
 - Base 35 ml/kg + height, mood and weather adjustments (formula below)
@@ -31,7 +36,8 @@ USGS-style hydrology report — one binary, no Electron, no account, no telemetr
 - "Hidrógrafo" theme (see DESIGN.md): bone paper, iron ink, stepped hydrograph
   of the day vs dashed capacity line, weather stamp, mono numerals
 - UI follows the system locale (English / Spanish / Chinese)
-- Export CSV (headers and mood values localized to the UI language) and JSON
+- Export CSV (`date, ml, mood, electrolytes ml, est. sodium mg` — headers and
+  mood values localized to the UI language) and JSON
 - Sounds embedded in the binary (extracted to `~/.hydrapotion/sounds` on first
   run); toggle in Settings → Sounds
 - Runs on X11 and native Wayland (Fyne v2.8.2 stable)
@@ -81,8 +87,10 @@ make test         # unit tests (goal formula + reminder intervals)
 
 1. Open the app, set **weight** and **height** in Settings (gear icon)
 2. Tap a card to log water; pick a **mood** — it adjusts today's goal
-3. Optionally search your **city** for the weather adjustment
-4. Enable the systemd timer so reminders fire without the GUI:
+3. After heavy sweating, tap an **electrolyte** serving (isotonic, ORS,
+   coconut water, broth) — tracked separately from water, with estimated sodium
+4. Optionally search your **city** for the weather adjustment
+5. Enable the systemd timer so reminders fire without the GUI:
 
 ```bash
 systemctl --user daemon-reload
@@ -107,6 +115,29 @@ goal = 35 ml/kg            (base, body weight)
 The reminder interval uses the same weather logic (see
 `internal/reminder`); both formulas are pure, unit-tested Go
 (`internal/goal`, `internal/reminder`).
+
+## Electrolytes
+
+Electrolyte intake is tracked **separately from water** (it does not count
+toward the water goal). Four predefined servings ship with the app, each with
+an estimated sodium content based on typical concentrations:
+
+| Serving | Volume | Est. sodium |
+|---|---|---|
+| Isotonic drink | 500 ml | ~250 mg Na |
+| Oral rehydration solution (WHO-style) | 250 ml | ~430 mg Na |
+| Coconut water | 250 ml | ~105 mg Na |
+| Broth | 250 ml | ~500 mg Na |
+
+Daily reference: **2 servings**, +1 when the configured weather reads ≥ 30 °C
+(`internal/electro`, pure and unit-tested). The header shows
+`x/y servings · ~z mg Na`; the CSV export adds the day's electrolyte volume
+and estimated sodium. Arbitrary CLI volumes
+(`hydrapotion electro <ml>`) are estimated at ~0.5 mg Na per ml.
+
+All sodium figures are **rough informational estimates**, not measurements
+and not dietary advice — for actual sodium intake, read the label of what
+you drink.
 
 **Plausibility check** (descriptive, not a clinical validation): the base
 35 ml/kg line sits inside the common clinical estimate band of 30–40 ml/kg/day

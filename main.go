@@ -29,6 +29,7 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
+	"hydrapotion/internal/electro"
 	"hydrapotion/internal/goal"
 	"hydrapotion/internal/reminder"
 )
@@ -39,67 +40,75 @@ import (
 var currentLang string = "es"
 
 var translations = map[string]map[string]string{
-	"how_much":        {"es": "¿Cuánto vas a tomar?", "en": "How much will you drink?", "zh": "你要喝多少？"},
-	"mood":            {"es": "Estado mental:", "en": "Mood:", "zh": "情绪状态："},
-	"mood_well":       {"es": "Bien", "en": "Good", "zh": "好"},
-	"mood_neutral":    {"es": "Neutral", "en": "Neutral", "zh": "一般"},
-	"mood_low":        {"es": "Bajo", "en": "Low", "zh": "低落"},
-	"mood_tense":      {"es": "Tenso", "en": "Tense", "zh": "紧张"},
-	"goal":            {"es": "Meta", "en": "Goal", "zh": "目标"},
-	"avg":             {"es": "Prom", "en": "Avg", "zh": "平均"},
-	"sun":             {"es": "Dom", "en": "Sun", "zh": "日"},
-	"mon":             {"es": "Lun", "en": "Mon", "zh": "一"},
-	"tue":             {"es": "Mar", "en": "Tue", "zh": "二"},
-	"wed":             {"es": "Mie", "en": "Wed", "zh": "三"},
-	"thu":             {"es": "Jue", "en": "Thu", "zh": "四"},
-	"fri":             {"es": "Vie", "en": "Fri", "zh": "五"},
-	"sat":             {"es": "Sab", "en": "Sat", "zh": "六"},
-	"settings_title":  {"es": "Configuración", "en": "Settings", "zh": "设置"},
-	"weight":          {"es": "Peso", "en": "Weight", "zh": "体重"},
-	"weight_ph":       {"es": "Peso en kg", "en": "Weight in kg", "zh": "体重（公斤）"},
-	"height":          {"es": "Altura", "en": "Height", "zh": "身高"},
-	"height_ph":       {"es": "Altura en cm", "en": "Height in cm", "zh": "身高（厘米）"},
-	"save":            {"es": "Guardar", "en": "Save", "zh": "保存"},
-	"reminder":        {"es": "Recordatorio", "en": "Reminder", "zh": "提醒"},
-	"min":             {"es": "min", "en": "min", "zh": "分钟"},
-	"hr":              {"es": "h", "en": "h", "zh": "小时"},
-	"location":        {"es": "Ubicación", "en": "Location", "zh": "位置"},
-	"not_set":         {"es": "No configurada", "en": "Not set", "zh": "未设置"},
-	"search_location": {"es": "Buscar ubicación", "en": "Search location", "zh": "搜索位置"},
-	"export_data":     {"es": "Exportar datos", "en": "Export data", "zh": "导出数据"},
-	"export_json":     {"es": "Exportar JSON", "en": "Export JSON", "zh": "导出 JSON"},
-	"export_csv":      {"es": "Exportar CSV", "en": "Export CSV", "zh": "导出 CSV"},
-	"csv_h_date":      {"es": "Fecha", "en": "Date", "zh": "日期"},
-	"csv_h_ml":        {"es": "ml", "en": "ml", "zh": "ml"},
-	"csv_h_mood":      {"es": "Estado de ánimo", "en": "Mood", "zh": "心情"},
-	"sound":           {"es": "Sonidos", "en": "Sounds", "zh": "声音"},
-	"close":           {"es": "Cerrar", "en": "Close", "zh": "关闭"},
-	"export":          {"es": "Exportar", "en": "Export", "zh": "导出"},
-	"json_saved":      {"es": "JSON guardado", "en": "JSON saved", "zh": "JSON 已保存"},
-	"csv_saved":       {"es": "CSV guardado", "en": "CSV saved", "zh": "CSV 已保存"},
-	"search_title":    {"es": "Buscar ubicación", "en": "Search location", "zh": "搜索位置"},
-	"city_ph":         {"es": "Ciudad, país...", "en": "City, country...", "zh": "城市，国家..."},
-	"search_btn":      {"es": "Buscar", "en": "Search", "zh": "搜索"},
-	"searching":       {"es": "Buscando...", "en": "Searching...", "zh": "搜索中..."},
-	"no_results":      {"es": "Sin resultados", "en": "No results", "zh": "无结果"},
-	"cancel":          {"es": "Cancelar", "en": "Cancel", "zh": "取消"},
-	"results":         {"es": "resultado(s):", "en": "result(s):", "zh": "个结果："},
-	"reminder_title":  {"es": "Recordatorio", "en": "Reminder", "zh": "提醒"},
-	"drink_title":     {"es": "Bebe Agua!", "en": "Drink Water!", "zh": "喝水！"},
-	"today_progress":  {"es": "Hoy: %d / %d ml (%.0f%%)", "en": "Today: %d / %d ml (%.0f%%)", "zh": "今日：%d / %d 毫升（%.0f%%）"},
-	"add_water":       {"es": "Agregar agua:", "en": "Add water:", "zh": "添加水："},
-	"snooze":          {"es": "Posponer:", "en": "Snooze:", "zh": "稍后提醒："},
-	"close_btn":       {"es": "Cerrar", "en": "Close", "zh": "关闭"},
-	"notify_title":    {"es": "Bebe Agua!", "en": "Drink Water!", "zh": "喝水！"},
-	"notify_body":     {"es": "Es hora de hidratarte!", "en": "Time to hydrate!", "zh": "该喝水了！"},
-	"settings_menu":   {"es": "Configuración", "en": "Settings", "zh": "设置"},
-	"show_window":     {"es": "Mostrar ventana", "en": "Show window", "zh": "显示窗口"},
-	"hide_tray":       {"es": "Minimizar a bandeja", "en": "Hide to tray", "zh": "最小化到托盘"},
-	"quit":            {"es": "Salir", "en": "Quit", "zh": "退出"},
-	"quick_log":       {"es": "Registro rápido", "en": "Quick log", "zh": "快速记录"},
-	"weekly":          {"es": "Resumen semanal", "en": "Weekly summary", "zh": "每周概览"},
-	"climate":         {"es": "CLIMA", "en": "WEATHER", "zh": "天气"},
-	"no_traces":       {"es": "sin trazas horarias", "en": "no hourly traces", "zh": "无逐时记录"},
+	"how_much":         {"es": "¿Cuánto vas a tomar?", "en": "How much will you drink?", "zh": "你要喝多少？"},
+	"mood":             {"es": "Estado mental:", "en": "Mood:", "zh": "情绪状态："},
+	"mood_well":        {"es": "Bien", "en": "Good", "zh": "好"},
+	"mood_neutral":     {"es": "Neutral", "en": "Neutral", "zh": "一般"},
+	"mood_low":         {"es": "Bajo", "en": "Low", "zh": "低落"},
+	"mood_tense":       {"es": "Tenso", "en": "Tense", "zh": "紧张"},
+	"goal":             {"es": "Meta", "en": "Goal", "zh": "目标"},
+	"avg":              {"es": "Prom", "en": "Avg", "zh": "平均"},
+	"sun":              {"es": "Dom", "en": "Sun", "zh": "日"},
+	"mon":              {"es": "Lun", "en": "Mon", "zh": "一"},
+	"tue":              {"es": "Mar", "en": "Tue", "zh": "二"},
+	"wed":              {"es": "Mie", "en": "Wed", "zh": "三"},
+	"thu":              {"es": "Jue", "en": "Thu", "zh": "四"},
+	"fri":              {"es": "Vie", "en": "Fri", "zh": "五"},
+	"sat":              {"es": "Sab", "en": "Sat", "zh": "六"},
+	"settings_title":   {"es": "Configuración", "en": "Settings", "zh": "设置"},
+	"weight":           {"es": "Peso", "en": "Weight", "zh": "体重"},
+	"weight_ph":        {"es": "Peso en kg", "en": "Weight in kg", "zh": "体重（公斤）"},
+	"height":           {"es": "Altura", "en": "Height", "zh": "身高"},
+	"height_ph":        {"es": "Altura en cm", "en": "Height in cm", "zh": "身高（厘米）"},
+	"save":             {"es": "Guardar", "en": "Save", "zh": "保存"},
+	"reminder":         {"es": "Recordatorio", "en": "Reminder", "zh": "提醒"},
+	"min":              {"es": "min", "en": "min", "zh": "分钟"},
+	"hr":               {"es": "h", "en": "h", "zh": "小时"},
+	"location":         {"es": "Ubicación", "en": "Location", "zh": "位置"},
+	"not_set":          {"es": "No configurada", "en": "Not set", "zh": "未设置"},
+	"search_location":  {"es": "Buscar ubicación", "en": "Search location", "zh": "搜索位置"},
+	"export_data":      {"es": "Exportar datos", "en": "Export data", "zh": "导出数据"},
+	"export_json":      {"es": "Exportar JSON", "en": "Export JSON", "zh": "导出 JSON"},
+	"export_csv":       {"es": "Exportar CSV", "en": "Export CSV", "zh": "导出 CSV"},
+	"csv_h_date":       {"es": "Fecha", "en": "Date", "zh": "日期"},
+	"csv_h_ml":         {"es": "ml", "en": "ml", "zh": "ml"},
+	"csv_h_mood":       {"es": "Estado de ánimo", "en": "Mood", "zh": "心情"},
+	"sound":            {"es": "Sonidos", "en": "Sounds", "zh": "声音"},
+	"close":            {"es": "Cerrar", "en": "Close", "zh": "关闭"},
+	"export":           {"es": "Exportar", "en": "Export", "zh": "导出"},
+	"json_saved":       {"es": "JSON guardado", "en": "JSON saved", "zh": "JSON 已保存"},
+	"csv_saved":        {"es": "CSV guardado", "en": "CSV saved", "zh": "CSV 已保存"},
+	"search_title":     {"es": "Buscar ubicación", "en": "Search location", "zh": "搜索位置"},
+	"city_ph":          {"es": "Ciudad, país...", "en": "City, country...", "zh": "城市，国家..."},
+	"search_btn":       {"es": "Buscar", "en": "Search", "zh": "搜索"},
+	"searching":        {"es": "Buscando...", "en": "Searching...", "zh": "搜索中..."},
+	"no_results":       {"es": "Sin resultados", "en": "No results", "zh": "无结果"},
+	"cancel":           {"es": "Cancelar", "en": "Cancel", "zh": "取消"},
+	"results":          {"es": "resultado(s):", "en": "result(s):", "zh": "个结果："},
+	"reminder_title":   {"es": "Recordatorio", "en": "Reminder", "zh": "提醒"},
+	"drink_title":      {"es": "Bebe Agua!", "en": "Drink Water!", "zh": "喝水！"},
+	"today_progress":   {"es": "Hoy: %d / %d ml (%.0f%%)", "en": "Today: %d / %d ml (%.0f%%)", "zh": "今日：%d / %d 毫升（%.0f%%）"},
+	"add_water":        {"es": "Agregar agua:", "en": "Add water:", "zh": "添加水："},
+	"snooze":           {"es": "Posponer:", "en": "Snooze:", "zh": "稍后提醒："},
+	"close_btn":        {"es": "Cerrar", "en": "Close", "zh": "关闭"},
+	"notify_title":     {"es": "Bebe Agua!", "en": "Drink Water!", "zh": "喝水！"},
+	"notify_body":      {"es": "Es hora de hidratarte!", "en": "Time to hydrate!", "zh": "该喝水了！"},
+	"settings_menu":    {"es": "Configuración", "en": "Settings", "zh": "设置"},
+	"show_window":      {"es": "Mostrar ventana", "en": "Show window", "zh": "显示窗口"},
+	"hide_tray":        {"es": "Minimizar a bandeja", "en": "Hide to tray", "zh": "最小化到托盘"},
+	"quit":             {"es": "Salir", "en": "Quit", "zh": "退出"},
+	"quick_log":        {"es": "Registro rápido", "en": "Quick log", "zh": "快速记录"},
+	"weekly":           {"es": "Resumen semanal", "en": "Weekly summary", "zh": "每周概览"},
+	"climate":          {"es": "CLIMA", "en": "WEATHER", "zh": "天气"},
+	"no_traces":        {"es": "sin trazas horarias", "en": "no hourly traces", "zh": "无逐时记录"},
+	"electro":          {"es": "Electrolitos", "en": "Electrolytes", "zh": "电解质"},
+	"electro_isotonic": {"es": "Isotónica", "en": "Isotonic", "zh": "等渗饮料"},
+	"electro_ors":      {"es": "Suero oral", "en": "ORS drink", "zh": "口服补液"},
+	"electro_coconut":  {"es": "Agua de coco", "en": "Coconut water", "zh": "椰子水"},
+	"electro_broth":    {"es": "Caldo", "en": "Broth", "zh": "清汤"},
+	"electro_status":   {"es": "%d/%d dosis · ~%d mg Na", "en": "%d/%d servings · ~%d mg Na", "zh": "%d/%d 份 · 约%d毫克钠"},
+	"csv_h_electro":    {"es": "Electrolitos (ml)", "en": "Electrolytes (ml)", "zh": "电解质（毫升）"},
+	"csv_h_na":         {"es": "Sodio est. (mg)", "en": "Est. sodium (mg)", "zh": "钠估算（毫克）"},
 }
 
 func T(key string) string {
@@ -152,10 +161,11 @@ type Settings struct {
 }
 
 type HistoryEntry struct {
-	Date string     `json:"date"`
-	Ml   int        `json:"ml"`
-	Mood string     `json:"mood,omitempty"`
-	Logs []WaterLog `json:"logs,omitempty"`
+	Date      string     `json:"date"`
+	Ml        int        `json:"ml"`
+	Mood      string     `json:"mood,omitempty"`
+	Logs      []WaterLog `json:"logs,omitempty"`
+	ElectroMl int        `json:"electro_ml,omitempty"`
 }
 
 type WeatherData struct {
@@ -345,6 +355,47 @@ func (h *HydrapotionApp) AddWater(ml int) {
 	h.startReminderTimer()
 }
 
+// AddElectro registra una toma de electrolitos (isotónica, suero oral,
+// agua de coco, caldo...). No cuenta para la meta de agua: los electrolitos
+// se siguen por separado (volumen + dosis + sodio estimado). naMg es el
+// sodio estimado en mg que aporta la toma (0 en volúmenes raros).
+func (h *HydrapotionApp) AddElectro(ml, naMg int) {
+	h.mu.Lock()
+	h.resetIfNewDay()
+
+	today := h.todayStr()
+	now := time.Now().Format(time.RFC3339)
+	found := false
+	for i, entry := range h.history {
+		if entry.Date == today {
+			h.history[i].ElectroMl += ml
+			h.history[i].Logs = append(h.history[i].Logs, WaterLog{At: now, Ml: ml, Kind: "electro", Na: naMg})
+			found = true
+			break
+		}
+	}
+	if !found {
+		h.history = append(h.history, HistoryEntry{
+			Date: today, Ml: 0, ElectroMl: ml,
+			Logs: []WaterLog{{At: now, Ml: ml, Kind: "electro", Na: naMg}},
+		})
+	}
+	h.saveHistory()
+	h.mu.Unlock()
+
+	// Modo headless (hydrapotion electro): sin UI ni timer interno.
+	if h.headless {
+		return
+	}
+
+	if h.onUpdate != nil {
+		h.onUpdate()
+	}
+
+	// Tomar cualquier cosa pospone el siguiente recordatorio de agua.
+	h.startReminderTimer()
+}
+
 func (h *HydrapotionApp) SetMood(mood Mood) {
 	h.mu.Lock()
 	h.settings.CurrentMood = mood
@@ -450,19 +501,79 @@ func (h *HydrapotionApp) GetWeeklyData() []HistoryEntry {
 	return result
 }
 
-// TodayLogs devuelve una copia de los eventos intradía de hoy.
+// TodayLogs devuelve una copia de los eventos de AGUA de hoy (sin
+// electrolitos, que separa TodayElectroLogs para el hidrógrafo).
 func (h *HydrapotionApp) TodayLogs() []WaterLog {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	today := h.todayStr()
 	for _, entry := range h.history {
 		if entry.Date == today {
-			out := make([]WaterLog, len(entry.Logs))
-			copy(out, entry.Logs)
+			out := make([]WaterLog, 0, len(entry.Logs))
+			for _, l := range entry.Logs {
+				if l.Kind != "electro" {
+					out = append(out, l)
+				}
+			}
 			return out
 		}
 	}
 	return nil
+}
+
+// TodayElectroLogs devuelve una copia de las tomas de electrolitos de hoy.
+func (h *HydrapotionApp) TodayElectroLogs() []WaterLog {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	today := h.todayStr()
+	for _, entry := range h.history {
+		if entry.Date == today {
+			out := make([]WaterLog, 0, len(entry.Logs))
+			for _, l := range entry.Logs {
+				if l.Kind == "electro" {
+					out = append(out, l)
+				}
+			}
+			return out
+		}
+	}
+	return nil
+}
+
+// ElectroStats resume el día de electrolitos: volumen, dosis y sodio est.
+type ElectroStats struct {
+	Ml    int
+	Dosis int
+	Na    int
+}
+
+func (h *HydrapotionApp) ElectroStats() ElectroStats {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	today := h.todayStr()
+	var st ElectroStats
+	for _, entry := range h.history {
+		if entry.Date != today {
+			continue
+		}
+		st.Ml = entry.ElectroMl
+		for _, l := range entry.Logs {
+			if l.Kind == "electro" {
+				st.Dosis++
+				st.Na += l.Na
+			}
+		}
+		break
+	}
+	return st
+}
+
+// ElectroTarget — dosis de referencia de hoy (2; 3 en días de mucho calor).
+func (h *HydrapotionApp) ElectroTarget() int {
+	if h.weather == nil {
+		return electro.DailyTarget(0, false)
+	}
+	return electro.DailyTarget(h.weather.Temperature, true)
 }
 
 func searchLocation(query string) ([]GeoResult, error) {
@@ -701,15 +812,35 @@ func playSound(soundPath string) {
 
 // WaterCard es una celda de registro del informe: filete de tinta, sin radio,
 // glifo en azul-hidro y numeración mono. El hover tiñe con lavado de papel.
+// La variante de electrolitos reutiliza la celda con glifo musgo propio,
+// subtítulo con el nombre de la porción y tamaño compacto (4 por fila).
 type WaterCard struct {
 	widget.BaseWidget
 	ml      int
+	label   string      // texto del contador ("" → "%d ml")
+	icon    *image.RGBA // glifo (nil → glassIcon en azul-hidro)
+	sub     string      // subtítulo bajo el contador ("" → oculto)
+	small   bool        // variante compacta
 	onClick func()
 	hovered bool
 }
 
 func NewWaterCard(ml int, onClick func()) *WaterCard {
 	w := &WaterCard{ml: ml, onClick: onClick}
+	w.ExtendBaseWidget(w)
+	return w
+}
+
+// NewElectroCard crea la celda compacta de una porción de electrolitos.
+func NewElectroCard(s electro.Serving, onClick func()) *WaterCard {
+	w := &WaterCard{
+		ml:      s.Ml,
+		label:   fmt.Sprintf("%d ml", s.Ml),
+		icon:    electroIcon(s.ID, 48, 64),
+		sub:     T("electro_" + s.ID),
+		small:   true,
+		onClick: onClick,
+	}
 	w.ExtendBaseWidget(w)
 	return w
 }
@@ -729,34 +860,51 @@ func (c *WaterCard) MouseOut() {
 func (c *WaterCard) MouseMoved(*desktop.MouseEvent) {}
 
 func (c *WaterCard) CreateRenderer() fyne.WidgetRenderer {
-	icon := canvas.NewImageFromImage(glassIcon(c.ml, 48, 64, repHydro))
+	var glyph *image.RGBA
+	if c.icon != nil {
+		glyph = c.icon
+	} else {
+		glyph = glassIcon(c.ml, 48, 64, repHydro)
+	}
+	icon := canvas.NewImageFromImage(glyph)
 	icon.FillMode = canvas.ImageFillContain
 	icon.SetMinSize(fyne.NewSize(36, 44))
 
-	ml := canvas.NewText(fmt.Sprintf("%d ml", c.ml), repInk)
+	txt := c.label
+	if txt == "" {
+		txt = fmt.Sprintf("%d ml", c.ml)
+	}
+	ml := canvas.NewText(txt, repInk)
 	ml.Alignment = fyne.TextAlignCenter
 	ml.TextSize = 13
 	ml.TextStyle = fyne.TextStyle{Monospace: true, Bold: true}
+
+	sub := canvas.NewText(c.sub, repInkMuted)
+	sub.Alignment = fyne.TextAlignCenter
+	sub.TextSize = 9
+	sub.TextStyle = fyne.TextStyle{Monospace: true}
+	if c.sub == "" {
+		sub.Hide()
+	}
 
 	bg := canvas.NewRectangle(color.Transparent)
 	bg.StrokeColor = repRule
 	bg.StrokeWidth = 1
 
+	rows := []fyne.CanvasObject{layout.NewSpacer(), icon, ml}
+	if c.sub != "" {
+		rows = append(rows, sub)
+	}
+	rows = append(rows, layout.NewSpacer())
+
 	wrapped := container.NewMax(
 		bg,
-		container.NewCenter(
-			container.NewVBox(
-				layout.NewSpacer(),
-				icon,
-				ml,
-				layout.NewSpacer(),
-			),
-		),
+		container.NewCenter(container.NewVBox(rows...)),
 	)
 
 	return &cardRender{
 		card: c, bg: bg,
-		icon: icon, ml: ml,
+		icon: icon, ml: ml, sub: sub,
 		wrapped: wrapped,
 	}
 }
@@ -766,6 +914,7 @@ type cardRender struct {
 	bg      *canvas.Rectangle
 	icon    *canvas.Image
 	ml      *canvas.Text
+	sub     *canvas.Text
 	wrapped *fyne.Container
 }
 
@@ -774,7 +923,12 @@ func (r *cardRender) Layout(s fyne.Size) {
 	r.wrapped.Move(fyne.NewPos(0, 0))
 }
 
-func (r *cardRender) MinSize() fyne.Size { return fyne.NewSize(96, 84) }
+func (r *cardRender) MinSize() fyne.Size {
+	if r.card.small {
+		return fyne.NewSize(76, 96)
+	}
+	return fyne.NewSize(96, 84)
+}
 
 func (r *cardRender) Refresh() {
 	if r.card.hovered {
@@ -946,6 +1100,97 @@ func drawBottle(img *image.RGBA, clr color.Color) {
 			img.Set(x, y, lig)
 		}
 	}
+}
+
+// ----------------------------------------------------------------
+// Glifos pixel de electrolitos (variante musgo, celda compacta)
+// ----------------------------------------------------------------
+
+// electroIcon dibuja el glifo de una porción de electrolitos en verde musgo:
+// botella con etiqueta (isotónica), bolsa de suero, coco con pajita, cuenco.
+func electroIcon(id string, w, h int) *image.RGBA {
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	switch id {
+	case "isotonic":
+		drawBottle(img, repMoss)
+		drawLabelBand(img, repPaper)
+	case "ors":
+		drawPouch(img, repMoss)
+	case "coconut":
+		drawCoconut(img, repMoss)
+	case "broth":
+		drawBowl(img, repMoss)
+	}
+	return img
+}
+
+// drawLabelBand pinta una banda horizontal (etiqueta) sobre el cuerpo del
+// envase para distinguir la botella isotónica de la de agua.
+func drawLabelBand(img *image.RGBA, clr color.Color) {
+	w, h := img.Bounds().Dx(), img.Bounds().Dy()
+	repFillRect(img, w*5/18, h*9/20, w*13/18, h*13/20, clr)
+}
+
+// drawPouch — bolsa de suero oral / sales de rehidratación: cuerpo cuadrado
+// con ranura de colgado arriba y línea de nivel del líquido.
+func drawPouch(img *image.RGBA, clr color.Color) {
+	w, h := img.Bounds().Dx(), img.Bounds().Dy()
+	x0, x1 := w*3/10, w*7/10
+	y0, y1 := h/5, h*4/5
+	repFillRect(img, x0, y0, x1, y1, clr)
+	// ranura de colgado (hueco papel)
+	repFillRect(img, w*15/32, y0+2, w*17/32, y0+5, repPaper)
+	// línea de nivel
+	repHLine(img, x0+2, x1-2, y0+(y1-y0)*2/3, repPaper)
+}
+
+// drawCoconut — coco verde con tres poros y pajita diagonal.
+func drawCoconut(img *image.RGBA, clr color.Color) {
+	w, h := img.Bounds().Dx(), img.Bounds().Dy()
+	cx, cy := w/2, h*11/20
+	r := w * 13 / 40
+	for y := cy - r; y <= cy+r; y++ {
+		for x := cx - r; x <= cx+r; x++ {
+			dx, dy := x-cx, y-cy
+			if dx*dx+dy*dy <= r*r {
+				img.Set(x, y, clr)
+			}
+		}
+	}
+	pore := func(px, py int) { repFillRect(img, px-1, py-1, px+1, py+1, repPaper) }
+	pore(cx-5, cy-4)
+	pore(cx+5, cy-4)
+	pore(cx, cy+2)
+	// pajita saliendo del coco hacia arriba a la derecha
+	for t := 0; t <= 10; t++ {
+		x := cx + 2 + t
+		y := cy - 6 - t
+		if x < w && y >= 0 {
+			img.Set(x, y, clr)
+			img.Set(x+1, y, clr)
+		}
+	}
+}
+
+// drawBowl — cuenco de caldo: semicírculo con borde más ancho y vapor.
+func drawBowl(img *image.RGBA, clr color.Color) {
+	w, h := img.Bounds().Dx(), img.Bounds().Dy()
+	cx, cy := w/2, h*11/20
+	r := w * 3 / 10
+	for y := cy; y <= cy+r; y++ {
+		for x := cx - r; x <= cx+r; x++ {
+			dx, dy := x-cx, y-cy
+			if dx*dx+dy*dy <= r*r {
+				img.Set(x, y, clr)
+			}
+		}
+	}
+	repHLine(img, cx-r-3, cx+r+3, cy, clr)
+	repHLine(img, cx-r-3, cx+r+3, cy+1, clr)
+	repVLine(img, cx-6, cy-16, cy-10, clr)
+	repVLine(img, cx-5, cy-16, cy-10, clr)
+	repVLine(img, cx+6, cy-18, cy-12, clr)
+	repVLine(img, cx+7, cy-18, cy-12, clr)
 }
 
 func lerpColor(a, b color.Color, t float64) color.Color {
@@ -1314,10 +1559,42 @@ func (h *HydrapotionApp) CreateMainUI() fyne.CanvasObject {
 
 	chart := NewWaterChart()
 
+	// Electrolitos: mini-tarjetas por porción + estado del día en la cabecera.
+	electroCards := make([]fyne.CanvasObject, 0, len(electro.Servings))
+	for _, s := range electro.Servings {
+		electroCards = append(electroCards, NewElectroCard(s, func() {
+			h.AddElectro(s.Ml, s.SodiumMg)
+			playSound("add_water.wav")
+		}))
+	}
+	electroGrid := container.NewGridWithColumns(len(electro.Servings), electroCards...)
+
+	electroStatus := canvas.NewText("", repInkMuted)
+	electroStatus.TextStyle = fyne.TextStyle{Monospace: true}
+	electroStatus.TextSize = 10
+	electroStatus.Alignment = fyne.TextAlignTrailing
+	updateElectro := func() {
+		st := h.ElectroStats()
+		electroStatus.Text = fmt.Sprintf(T("electro_status"), st.Dosis, h.ElectroTarget(), st.Na)
+		canvas.Refresh(electroStatus)
+	}
+
+	electroHead := container.NewHBox(
+		widget.NewLabelWithStyle(strings.ToUpper(T("electro")), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		layout.NewSpacer(),
+		electroStatus,
+	)
+	electroSection := container.NewVBox(
+		electroHead,
+		canvas.NewLine(repHairline),
+		electroGrid,
+	)
+
 	h.onUpdate = func() {
 		c, _, _, _ := h.GetProgress()
-		hydro.SetDay(h.TodayLogs(), c, h.CalculateGoal(), h.weatherBonus())
+		hydro.SetDay(h.TodayLogs(), h.TodayElectroLogs(), c, h.CalculateGoal(), h.weatherBonus())
 		chart.SetData(h.GetWeeklyData(), h.CalculateGoal())
+		updateElectro()
 	}
 	h.onUpdate()
 
@@ -1325,6 +1602,7 @@ func (h *HydrapotionApp) CreateMainUI() fyne.CanvasObject {
 		hydro,
 		section(T("quick_log")),
 		container.NewCenter(grid),
+		electroSection,
 		section(T("weekly")),
 		chart,
 	)
@@ -1333,7 +1611,7 @@ func (h *HydrapotionApp) CreateMainUI() fyne.CanvasObject {
 		container.NewPadded(header),
 		container.NewPadded(moodRow),
 		nil, nil,
-		body,
+		container.NewVScroll(body),
 	)
 }
 
@@ -1580,7 +1858,8 @@ func (h *HydrapotionApp) exportCSV(w fyne.Window) {
 	}
 
 	var buf bytes.Buffer
-	buf.WriteString(fmt.Sprintf("%s,%s,%s\n", T("csv_h_date"), T("csv_h_ml"), T("csv_h_mood")))
+	buf.WriteString(fmt.Sprintf("%s,%s,%s,%s,%s\n", T("csv_h_date"), T("csv_h_ml"), T("csv_h_mood"),
+		T("csv_h_electro"), T("csv_h_na")))
 	for _, e := range h.history {
 		mood := "-"
 		if e.Mood != "" {
@@ -1590,7 +1869,14 @@ func (h *HydrapotionApp) exportCSV(w fyne.Window) {
 				mood = e.Mood
 			}
 		}
-		buf.WriteString(fmt.Sprintf("%s,%d,%s\n", e.Date, e.Ml, mood))
+		// Sodio estimado del día: suma del Na registrado por toma.
+		na := 0
+		for _, l := range e.Logs {
+			if l.Kind == "electro" {
+				na += l.Na
+			}
+		}
+		buf.WriteString(fmt.Sprintf("%s,%d,%s,%d,%d\n", e.Date, e.Ml, mood, e.ElectroMl, na))
 	}
 
 	dialog.ShowFileSave(func(wc fyne.URIWriteCloser, err error) {
@@ -1612,6 +1898,7 @@ func (h *HydrapotionApp) setupSystemTray() {
 			fyne.NewMenuItem("150ml", func() { h.AddWater(150) }),
 			fyne.NewMenuItem("250ml", func() { h.AddWater(250) }),
 			fyne.NewMenuItem("500ml", func() { h.AddWater(500) }),
+			fyne.NewMenuItem(T("electro")+" 250ml", func() { h.AddElectro(250, electro.SodiumForMl(250)) }),
 			fyne.NewMenuItemSeparator(),
 			fyne.NewMenuItem(T("settings_menu"), func() { h.showSettings() }),
 			fyne.NewMenuItem(T("hide_tray"), func() { h.mainWindow.Hide() }),
