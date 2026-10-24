@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Hydrapotion
+GenericName=Rastreador de hidratación
+Comment=Registra tu consumo de agua con informe hidrológico (estilo USGS)
+Exec=hydrapotion
+Icon=hydrapotion
+Terminal=false
+Categories=Utility;
+Keywords=agua;hidratación;water;hydration;
+StartupNotify=false

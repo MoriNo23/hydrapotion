@@ -62,7 +62,8 @@ user timer, proceso de <1 s cada 15 min); la GUI solo se abre para visualizar.
   opcional para la GUI.
 - Restricciones durables: binario único sin Node/Electron; GUI requiere libnotify y
   PulseAudio; single instance; `GOGC=50` + `GOMEMLIMIT=192MiB` (GUI) / `48MiB`
-  (headless); waybar eliminado — no reintroducir `status.json` ni consumers de waybar.
+  (headless); integración con barras de estado externas eliminada a propósito — no
+  reintroducir `status.json` ni consumers externos de estado.
 
 ## Brand Commitments
 

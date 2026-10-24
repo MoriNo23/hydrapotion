@@ -1,132 +1,137 @@
 # Hydrapotion
 
-Desktop hydration tracker — smart, personal, medical-grade logging.
+A small Linux desktop app that logs daily water intake and draws it as a
+USGS-style hydrology report — one binary, no Electron, no account, no telemetry.
 
-![Go](https://img.shields.io/badge/Go-00ADD8?style=flat&logo=go&logoColor=white)
-![Fyne](https://img.shields.io/badge/Fyne_v2-2B2836?style=flat)
+![Build](https://github.com/MoriNo23/hydrapotion/actions/workflows/build.yml/badge.svg)
+![Release](https://img.shields.io/github/v/release/MoriNo23/hydrapotion)
+![Go](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green)
+
+![Main window — Hidrógrafo theme](docs/screenshot.png)
 
 ## Features
 
-- **Quick logging** — 150ml / 250ml / 500ml one-click buttons
-- **Smart goal** — base 35ml/kg + mood bonus + weather bonus (temp, humidity)
-- **Weekly chart** — bar chart with goal line + weekly average, medical-grade visual
-- **Mood tracking** — log mood per day (Bien / Neutral / Bajo / Tenso)
-- **USGS report UI ("Hidrógrafo")** — bone-paper gauging-station report: the day drawn as a stepped hydrograph vs a dashed capacity line, weather stamps, tabular mono numerals, 1px rules, zero-radius cells (see DESIGN.md)
-- **System tray** — minimize to tray, quick-add from context menu
-- **Smart reminders** — dynamic interval adapting to time-of-day (×0.7 afternoon, ×2.0 night) and weather (×0.5 if ≥35°C). Configurable base: 1h–3h.
-- **systemd timer mode (Linux)** — reminders run headless via `hydrapotion --remind` + systemd user timer: the GUI can stay closed and the reminder still fires (~10 MB, <1s per tick instead of a full GUI process resident in RAM)
-- **CLI** — `hydrapotion add 250` y `hydrapotion status` para loguear desde la terminal
-- **Low RAM** — `GOMEMLIMIT`/`GOGC` tuned, `-s -w` binary, headless reminders without OpenGL
-- **Weather** — auto-fetches temperature & humidity via Open-Meteo
-- **Export** — CSV (`Fecha,ml,Estado de animo`) & JSON for doctor visits
-- **Sound effects** — ASMR keyboard sounds on interaction
-- **Single binary** — no Node.js, no Electron, no runtime deps
+**Logging**
+- One-click 150 / 250 / 500 ml cards with intraday log (`history.json`)
+- CLI: `hydrapotion add 250` — log without opening the window
+- System tray with quick-add
+
+**Daily goal**
+- Base 35 ml/kg + height, mood and weather adjustments (formula below)
+- Weekly summary panel with goal line and average
+
+**Reminders**
+- Dynamic interval: adapts to time of day (×0.7 afternoon, ×2.0 night) and
+  heat (×0.5 at ≥35 °C); configurable base 1–3 h; clamped 30 min–6 h
+- systemd user timer mode: `hydrapotion --remind` every 15 min — the GUI can
+  stay closed (~0 MB resident; each tick is a <1 s, ~10 MB process)
+
+**Interface & data**
+- "Hidrógrafo" theme (see DESIGN.md): bone paper, iron ink, stepped hydrograph
+  of the day vs dashed capacity line, weather stamp, mono numerals
+- UI follows the system locale (English / Spanish / Chinese)
+- Export CSV (headers and mood values localized to the UI language) and JSON
+- Sounds embedded in the binary (extracted to `~/.hydrapotion/sounds` on first
+  run); toggle in Settings → Sounds
+- Runs on X11 and native Wayland (Fyne v2.8.2 stable)
 
 ## Installation
 
-### Dependencies
+### 1. From a release (recommended)
+
+Grab the latest asset from [Releases](https://github.com/MoriNo23/hydrapotion/releases):
 
 ```bash
-# Debian / Ubuntu
-sudo apt install golang-go libgl1-mesa-dev xorg-dev pulseaudio libnotify-bin
+# Debian/Ubuntu — .deb installs the binary, icon, .desktop entry and user units
+sudo apt install ./hydrapotion_2.0.1_amd64.deb
+
+# or the loose binary
+chmod +x hydrapotion && ./hydrapotion
+
+# or the tarball (manual, no root)
+tar -xzf hydrapotion-v2.0.1-linux-amd64.tar.gz && cd hydrapotion-v2.0.1-linux-amd64
+./packaging/systemd/install-timers.sh
 ```
 
-### From source
+Verify checksums: `sha256sum -c checksums.txt`.
+
+### 2. Dependencies
+
+| Purpose | Debian / Ubuntu | Notes |
+|---|---|---|
+| **Run** (GUI) | `libgl1 libx11-6 libxcursor1 libxrandr2 libxinerama1 libxi6 libxxf86vm1 libxfixes3` | declared by the `.deb` |
+| **Run** (Wayland session) | `libwayland-client0 libxkbcommon0` | preinstalled on desktop systems |
+| **Run** (reminders/sound, optional) | `libnotify-bin pulseaudio-utils` | `notify-send`, `paplay` |
+| **Build** | `golang-go` (1.24+) + `libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev libegl-dev` | `sudo apt install ...` |
+
+The `.deb` declares the run-time dependencies for you; the build list is only
+needed to compile from source.
+
+### 3. From source
 
 ```bash
-git clone https://github.com/MoriNo23/hydrapotion.git
-cd hydrapotion
-go build -o ~/bin/hydrapotion -ldflags="-s -w" .
-~/bin/hydrapotion
+git clone https://github.com/MoriNo23/hydrapotion && cd hydrapotion
+make build        # or: go build -ldflags "-s -w" -o hydrapotion .
+make test         # unit tests (goal formula + reminder intervals)
+./hydrapotion
 ```
-
-Or run directly:
-
-```bash
-go run .
-```
-
-### Pre-built binary
-
-Download from [Releases](https://github.com/MoriNo23/hydrapotion/releases):
-
-```bash
-chmod +x hydrapotion-linux-amd64
-./hydrapotion-linux-amd64
-```
-
-Optional: copy to PATH and add `.desktop` entry for app launcher.
 
 ## Usage
 
-1. Open app → set **weight** and **height** in settings (gear icon)
-2. Click **150ml / 250ml / 500ml** to log water
-3. Select your **mood** — affects daily goal
-4. Check **weekly chart** below the cards
-5. **Export data** (CSV / JSON) from settings for medical records
-
-Data is stored in `~/.hydrapotion/` (settings.json + history.json + state.json + weather.json).
-
-## CLI (headless)
-
-La GUI es opcional. El mismo binario expone subcomandos sin abrir ventanas:
+1. Open the app, set **weight** and **height** in Settings (gear icon)
+2. Tap a card to log water; pick a **mood** — it adjusts today's goal
+3. Optionally search your **city** for the weather adjustment
+4. Enable the systemd timer so reminders fire without the GUI:
 
 ```bash
-hydrapotion add 250     # registra 250 ml
-hydrapotion status      # progreso del día + clima cacheado
-hydrapotion --remind    # evalúa si toca recordatorio y sale (lo llama systemd)
-hydrapotion --version
-```
-
-## Recordatorios con systemd timer (Linux)
-
-Los recordatorios ya no requieren la GUI residente. Un timer de usuario ejecuta
-`hydrapotion --remind` cada 15 min; el binario decide con la lógica dinámica
-(hora del día + clima + última notificación) si envía la notificación y termina.
-
-```bash
-# instalar binario + timer (~1 min):
-./packaging/systemd/install-timers.sh
-
-# opcional: autostart de la GUI al login:
-./packaging/systemd/install-timers.sh --gui
-
-# verificar:
+systemctl --user daemon-reload
+systemctl --user enable --now hydrapotion-reminder.timer
 systemctl --user list-timers | grep hydrapotion
-journalctl --user -u hydrapotion-reminder.service -f
-
-# desinstalar:
-./packaging/systemd/uninstall-timers.sh
 ```
 
-Consumo típico: GUI ~150–250 MB residente; modo timer ~10 MB durante <1 s
-cada 15 min. La GUI (y su RAM) solo la abres cuando quieres ver el gráfico.
+All data stays in `~/.hydrapotion/` (`settings.json`, `history.json`,
+`state.json`, `weather.json`). Uninstall: `sudo dpkg -r hydrapotion` or
+`./packaging/systemd/uninstall-timers.sh`.
 
-## Presupuesto de RAM
+## How the goal is calculated
 
-| Modo | RAM residente | Notas |
-|------|---------------|-------|
-| GUI (ventana abierta) | ~150–250 MB | `GOMEMLIMIT=192MiB`, `GOGC=50` dentro del binario |
-| GUI en systray | ~80–150 MB | cierra la ventana con la X: queda en tray |
-| Solo timer (GUI cerrada) | ~0 MB | tick headless de ~10 MB durante <1 s |
+```
+goal = 35 ml/kg            (base, body weight)
+     + 5 ml per cm > 150   (height)
+     + 400 ml if mood = tense · 200 ml if low
+     + 200 / 400 / 600 ml  (temperature ≥ 25 / 30 / 35 °C)
+     + 100 ml              (humidity > 60%)
+```
 
-## Tech Stack
+The reminder interval uses the same weather logic (see
+`internal/reminder`); both formulas are pure, unit-tested Go
+(`internal/goal`, `internal/reminder`).
 
-| Component | Technology |
-|-----------|------------|
-| Language | Go |
-| GUI | Fyne v2 (develop) |
-| Storage | JSON in `~/.hydrapotion/` |
-| Reminders | systemd user timer (Linux) + timer interno en GUI |
-| Weather | Open-Meteo API (free) |
-| Notifications | notify-send |
-| Sound | paplay (PulseAudio) |
+**Plausibility check** (descriptive, not a clinical validation): the base
+35 ml/kg line sits inside the common clinical estimate band of 30–40 ml/kg/day
+and crosses the published adult adequate-intake values (EFSA 2010: 2.0/2.5 L;
+NAM 2004: 2.7/3.7 L) at typical adult weights — 57 kg / 71 kg / 77 kg /
+106 kg respectively. See [docs/goal-plausibility.png](docs/goal-plausibility.png).
+Outside that weight range the formula simply extrapolates a heuristic.
 
-## CI
+## Privacy
 
-Every push builds the binary via GitHub Actions. Releases include a pre-compiled `hydrapotion-linux-amd64` asset.
+- **What leaves the machine:** nothing, unless you search a city. The city
+  search queries `geocoding-api.open-meteo.com`, and the chosen coordinates
+  query `api.open-meteo.com` (current temperature + humidity). No API key, no
+  account, no analytics, no GPS/IP-based location — you type the city.
+- **What stays local:** everything else — settings, history, weather cache —
+  in `~/.hydrapotion/`. Exports are written where you choose.
+- **Reminders** run entirely offline (`--remind` only reads local state).
+
+## Disclaimer
+
+hydrapotion is a personal tracker, **not a medical device and not medical
+advice**. Its goal is a heuristic (35 ml/kg plus small adjustments), not a
+validated clinical recommendation. For health conditions, medication or
+pregnancy, ask a qualified professional how much water *you* should drink.
 
 ## License
 
-MIT
+[MIT](LICENSE) © MoriNo23
