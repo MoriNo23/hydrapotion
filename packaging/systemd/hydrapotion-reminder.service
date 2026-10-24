@@ -1,0 +1,13 @@
+[Unit]
+Description=Hydrapotion recordatorio de hidratación (headless)
+# No inicia GUI: solo evalúa si toca notificar y sale (<1s, ~10MB RAM)
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/hydrapotion --remind
+# Tope duro de memoria para el proceso oneshot
+MemoryMax=64M
+Environment=GOMEMLIMIT=48MiB
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true

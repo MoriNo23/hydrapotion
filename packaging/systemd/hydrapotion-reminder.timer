@@ -1,0 +1,14 @@
+[Unit]
+Description=Tick de recordatorios hydrapotion cada 15 minutos
+
+[Timer]
+# Primer tick 10 min tras el login, luego cada 15 min
+OnBootSec=10min
+OnUnitActiveSec=15min
+# Evita despertar exactamente en el segundo (agrupa con otros timers)
+RandomizedDelaySec=45
+# Si la laptop estaba apagada, dispara al encender (no pierde recordatorios)
+Persistent=true
+
+[Install]
+WantedBy=timers.target

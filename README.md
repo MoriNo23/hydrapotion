@@ -15,6 +15,9 @@ Desktop hydration tracker — smart, personal, medical-grade logging.
 - **Dark theme** — clean dark UI, easy on the eyes
 - **System tray** — minimize to tray, quick-add from context menu
 - **Smart reminders** — dynamic interval adapting to time-of-day (×0.7 afternoon, ×2.0 night) and weather (×0.5 if ≥35°C). Configurable base: 1h–3h.
+- **systemd timer mode (Linux)** — reminders run headless via `hydrapotion --remind` + systemd user timer: the GUI can stay closed and the reminder still fires (~10 MB, <1s per tick instead of a full GUI process resident in RAM)
+- **CLI** — `hydrapotion add 250` y `hydrapotion status` para loguear desde la terminal
+- **Low RAM** — `GOMEMLIMIT`/`GOGC` tuned, `-s -w` binary, headless reminders without OpenGL
 - **Weather** — auto-fetches temperature & humidity via Open-Meteo
 - **Export** — CSV (`Fecha,ml,Estado de animo`) & JSON for doctor visits
 - **Sound effects** — ASMR keyboard sounds on interaction
@@ -34,7 +37,7 @@ sudo apt install golang-go libgl1-mesa-dev xorg-dev pulseaudio libnotify-bin
 ```bash
 git clone https://github.com/MoriNo23/hydrapotion.git
 cd hydrapotion
-go build -o ~/bin/hydrapotion .
+go build -o ~/bin/hydrapotion -ldflags="-s -w" .
 ~/bin/hydrapotion
 ```
 
@@ -63,7 +66,50 @@ Optional: copy to PATH and add `.desktop` entry for app launcher.
 4. Check **weekly chart** below the cards
 5. **Export data** (CSV / JSON) from settings for medical records
 
-Data is stored in `~/.hydrapotion/` (settings.json + history.json).
+Data is stored in `~/.hydrapotion/` (settings.json + history.json + state.json + weather.json).
+
+## CLI (headless)
+
+La GUI es opcional. El mismo binario expone subcomandos sin abrir ventanas:
+
+```bash
+hydrapotion add 250     # registra 250 ml
+hydrapotion status      # progreso del día + clima cacheado
+hydrapotion --remind    # evalúa si toca recordatorio y sale (lo llama systemd)
+hydrapotion --version
+```
+
+## Recordatorios con systemd timer (Linux)
+
+Los recordatorios ya no requieren la GUI residente. Un timer de usuario ejecuta
+`hydrapotion --remind` cada 15 min; el binario decide con la lógica dinámica
+(hora del día + clima + última notificación) si envía la notificación y termina.
+
+```bash
+# instalar binario + timer (~1 min):
+./packaging/systemd/install-timers.sh
+
+# opcional: autostart de la GUI al login:
+./packaging/systemd/install-timers.sh --gui
+
+# verificar:
+systemctl --user list-timers | grep hydrapotion
+journalctl --user -u hydrapotion-reminder.service -f
+
+# desinstalar:
+./packaging/systemd/uninstall-timers.sh
+```
+
+Consumo típico: GUI ~150–250 MB residente; modo timer ~10 MB durante <1 s
+cada 15 min. La GUI (y su RAM) solo la abres cuando quieres ver el gráfico.
+
+## Presupuesto de RAM
+
+| Modo | RAM residente | Notas |
+|------|---------------|-------|
+| GUI (ventana abierta) | ~150–250 MB | `GOMEMLIMIT=192MiB`, `GOGC=50` dentro del binario |
+| GUI en systray | ~80–150 MB | cierra la ventana con la X: queda en tray |
+| Solo timer (GUI cerrada) | ~0 MB | tick headless de ~10 MB durante <1 s |
 
 ## Tech Stack
 
@@ -72,6 +118,7 @@ Data is stored in `~/.hydrapotion/` (settings.json + history.json).
 | Language | Go |
 | GUI | Fyne v2 (develop) |
 | Storage | JSON in `~/.hydrapotion/` |
+| Reminders | systemd user timer (Linux) + timer interno en GUI |
 | Weather | Open-Meteo API (free) |
 | Notifications | notify-send |
 | Sound | paplay (PulseAudio) |

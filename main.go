@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -33,59 +34,59 @@ import (
 var currentLang string = "es"
 
 var translations = map[string]map[string]string{
-	"how_much":         {"es": "¿Cuánto vas a tomar?", "en": "How much will you drink?", "zh": "你要喝多少？"},
-	"mood":             {"es": "Estado mental:", "en": "Mood:", "zh": "情绪状态："},
-	"mood_well":        {"es": "Bien", "en": "Good", "zh": "好"},
-	"mood_neutral":     {"es": "Neutral", "en": "Neutral", "zh": "一般"},
-	"mood_low":         {"es": "Bajo", "en": "Low", "zh": "低落"},
-	"mood_tense":       {"es": "Tenso", "en": "Tense", "zh": "紧张"},
-	"goal":             {"es": "Meta", "en": "Goal", "zh": "目标"},
-	"avg":              {"es": "Prom", "en": "Avg", "zh": "平均"},
-	"sun":              {"es": "Dom", "en": "Sun", "zh": "日"},
-	"mon":              {"es": "Lun", "en": "Mon", "zh": "一"},
-	"tue":              {"es": "Mar", "en": "Tue", "zh": "二"},
-	"wed":              {"es": "Mie", "en": "Wed", "zh": "三"},
-	"thu":              {"es": "Jue", "en": "Thu", "zh": "四"},
-	"fri":              {"es": "Vie", "en": "Fri", "zh": "五"},
-	"sat":              {"es": "Sab", "en": "Sat", "zh": "六"},
-	"settings_title":   {"es": "Configuración", "en": "Settings", "zh": "设置"},
-	"weight":           {"es": "Peso", "en": "Weight", "zh": "体重"},
-	"weight_ph":        {"es": "Peso en kg", "en": "Weight in kg", "zh": "体重（公斤）"},
-	"height":           {"es": "Altura", "en": "Height", "zh": "身高"},
-	"height_ph":        {"es": "Altura en cm", "en": "Height in cm", "zh": "身高（厘米）"},
-	"save":             {"es": "Guardar", "en": "Save", "zh": "保存"},
-	"reminder":         {"es": "Recordatorio", "en": "Reminder", "zh": "提醒"},
-	"min":              {"es": "min", "en": "min", "zh": "分钟"},
-	"hr":               {"es": "h", "en": "h", "zh": "小时"},
-	"location":         {"es": "Ubicación", "en": "Location", "zh": "位置"},
-	"not_set":          {"es": "No configurada", "en": "Not set", "zh": "未设置"},
-	"search_location":  {"es": "Buscar ubicación", "en": "Search location", "zh": "搜索位置"},
-	"export_data":      {"es": "Exportar datos", "en": "Export data", "zh": "导出数据"},
-	"export_json":      {"es": "Exportar JSON", "en": "Export JSON", "zh": "导出 JSON"},
-	"export_csv":       {"es": "Exportar CSV", "en": "Export CSV", "zh": "导出 CSV"},
-	"close":            {"es": "Cerrar", "en": "Close", "zh": "关闭"},
-	"export":           {"es": "Exportar", "en": "Export", "zh": "导出"},
-	"json_saved":       {"es": "JSON guardado", "en": "JSON saved", "zh": "JSON 已保存"},
-	"csv_saved":        {"es": "CSV guardado", "en": "CSV saved", "zh": "CSV 已保存"},
-	"search_title":     {"es": "Buscar ubicación", "en": "Search location", "zh": "搜索位置"},
-	"city_ph":          {"es": "Ciudad, país...", "en": "City, country...", "zh": "城市，国家..."},
-	"search_btn":       {"es": "Buscar", "en": "Search", "zh": "搜索"},
-	"searching":        {"es": "Buscando...", "en": "Searching...", "zh": "搜索中..."},
-	"no_results":       {"es": "Sin resultados", "en": "No results", "zh": "无结果"},
-	"cancel":           {"es": "Cancelar", "en": "Cancel", "zh": "取消"},
-	"results":          {"es": "resultado(s):", "en": "result(s):", "zh": "个结果："},
-	"reminder_title":   {"es": "Recordatorio", "en": "Reminder", "zh": "提醒"},
-	"drink_title":      {"es": "Bebe Agua!", "en": "Drink Water!", "zh": "喝水！"},
-	"today_progress":   {"es": "Hoy: %d / %d ml (%.0f%%)", "en": "Today: %d / %d ml (%.0f%%)", "zh": "今日：%d / %d 毫升（%.0f%%）"},
-	"add_water":        {"es": "Agregar agua:", "en": "Add water:", "zh": "添加水："},
-	"snooze":           {"es": "Posponer:", "en": "Snooze:", "zh": "稍后提醒："},
-	"close_btn":        {"es": "Cerrar", "en": "Close", "zh": "关闭"},
-	"notify_title":     {"es": "Bebe Agua!", "en": "Drink Water!", "zh": "喝水！"},
-	"notify_body":      {"es": "Es hora de hidratarte!", "en": "Time to hydrate!", "zh": "该喝水了！"},
-	"settings_menu":    {"es": "Configuración", "en": "Settings", "zh": "设置"},
-	"show_window":      {"es": "Mostrar ventana", "en": "Show window", "zh": "显示窗口"},
-	"hide_tray":        {"es": "Minimizar a bandeja", "en": "Hide to tray", "zh": "最小化到托盘"},
-	"quit":             {"es": "Salir", "en": "Quit", "zh": "退出"},
+	"how_much":        {"es": "¿Cuánto vas a tomar?", "en": "How much will you drink?", "zh": "你要喝多少？"},
+	"mood":            {"es": "Estado mental:", "en": "Mood:", "zh": "情绪状态："},
+	"mood_well":       {"es": "Bien", "en": "Good", "zh": "好"},
+	"mood_neutral":    {"es": "Neutral", "en": "Neutral", "zh": "一般"},
+	"mood_low":        {"es": "Bajo", "en": "Low", "zh": "低落"},
+	"mood_tense":      {"es": "Tenso", "en": "Tense", "zh": "紧张"},
+	"goal":            {"es": "Meta", "en": "Goal", "zh": "目标"},
+	"avg":             {"es": "Prom", "en": "Avg", "zh": "平均"},
+	"sun":             {"es": "Dom", "en": "Sun", "zh": "日"},
+	"mon":             {"es": "Lun", "en": "Mon", "zh": "一"},
+	"tue":             {"es": "Mar", "en": "Tue", "zh": "二"},
+	"wed":             {"es": "Mie", "en": "Wed", "zh": "三"},
+	"thu":             {"es": "Jue", "en": "Thu", "zh": "四"},
+	"fri":             {"es": "Vie", "en": "Fri", "zh": "五"},
+	"sat":             {"es": "Sab", "en": "Sat", "zh": "六"},
+	"settings_title":  {"es": "Configuración", "en": "Settings", "zh": "设置"},
+	"weight":          {"es": "Peso", "en": "Weight", "zh": "体重"},
+	"weight_ph":       {"es": "Peso en kg", "en": "Weight in kg", "zh": "体重（公斤）"},
+	"height":          {"es": "Altura", "en": "Height", "zh": "身高"},
+	"height_ph":       {"es": "Altura en cm", "en": "Height in cm", "zh": "身高（厘米）"},
+	"save":            {"es": "Guardar", "en": "Save", "zh": "保存"},
+	"reminder":        {"es": "Recordatorio", "en": "Reminder", "zh": "提醒"},
+	"min":             {"es": "min", "en": "min", "zh": "分钟"},
+	"hr":              {"es": "h", "en": "h", "zh": "小时"},
+	"location":        {"es": "Ubicación", "en": "Location", "zh": "位置"},
+	"not_set":         {"es": "No configurada", "en": "Not set", "zh": "未设置"},
+	"search_location": {"es": "Buscar ubicación", "en": "Search location", "zh": "搜索位置"},
+	"export_data":     {"es": "Exportar datos", "en": "Export data", "zh": "导出数据"},
+	"export_json":     {"es": "Exportar JSON", "en": "Export JSON", "zh": "导出 JSON"},
+	"export_csv":      {"es": "Exportar CSV", "en": "Export CSV", "zh": "导出 CSV"},
+	"close":           {"es": "Cerrar", "en": "Close", "zh": "关闭"},
+	"export":          {"es": "Exportar", "en": "Export", "zh": "导出"},
+	"json_saved":      {"es": "JSON guardado", "en": "JSON saved", "zh": "JSON 已保存"},
+	"csv_saved":       {"es": "CSV guardado", "en": "CSV saved", "zh": "CSV 已保存"},
+	"search_title":    {"es": "Buscar ubicación", "en": "Search location", "zh": "搜索位置"},
+	"city_ph":         {"es": "Ciudad, país...", "en": "City, country...", "zh": "城市，国家..."},
+	"search_btn":      {"es": "Buscar", "en": "Search", "zh": "搜索"},
+	"searching":       {"es": "Buscando...", "en": "Searching...", "zh": "搜索中..."},
+	"no_results":      {"es": "Sin resultados", "en": "No results", "zh": "无结果"},
+	"cancel":          {"es": "Cancelar", "en": "Cancel", "zh": "取消"},
+	"results":         {"es": "resultado(s):", "en": "result(s):", "zh": "个结果："},
+	"reminder_title":  {"es": "Recordatorio", "en": "Reminder", "zh": "提醒"},
+	"drink_title":     {"es": "Bebe Agua!", "en": "Drink Water!", "zh": "喝水！"},
+	"today_progress":  {"es": "Hoy: %d / %d ml (%.0f%%)", "en": "Today: %d / %d ml (%.0f%%)", "zh": "今日：%d / %d 毫升（%.0f%%）"},
+	"add_water":       {"es": "Agregar agua:", "en": "Add water:", "zh": "添加水："},
+	"snooze":          {"es": "Posponer:", "en": "Snooze:", "zh": "稍后提醒："},
+	"close_btn":       {"es": "Cerrar", "en": "Close", "zh": "关闭"},
+	"notify_title":    {"es": "Bebe Agua!", "en": "Drink Water!", "zh": "喝水！"},
+	"notify_body":     {"es": "Es hora de hidratarte!", "en": "Time to hydrate!", "zh": "该喝水了！"},
+	"settings_menu":   {"es": "Configuración", "en": "Settings", "zh": "设置"},
+	"show_window":     {"es": "Mostrar ventana", "en": "Show window", "zh": "显示窗口"},
+	"hide_tray":       {"es": "Minimizar a bandeja", "en": "Hide to tray", "zh": "最小化到托盘"},
+	"quit":            {"es": "Salir", "en": "Quit", "zh": "退出"},
 }
 
 func T(key string) string {
@@ -102,7 +103,7 @@ func T(key string) string {
 type Mood int
 
 const (
-	MoodWell    Mood = iota
+	MoodWell Mood = iota
 	MoodNeutral
 	MoodLow
 	MoodTense
@@ -176,6 +177,8 @@ type HydrapotionApp struct {
 	reminderWin fyne.Window
 	app         fyne.App
 	weather     *WeatherData
+	headless    bool
+	state       sharedState
 }
 
 func NewHydrapotionApp(a fyne.App) *HydrapotionApp {
@@ -199,6 +202,8 @@ func NewHydrapotionApp(a fyne.App) *HydrapotionApp {
 	currentLang = h.settings.Language
 	h.loadHistory()
 	h.resetIfNewDay()
+	h.state = loadSharedState(h.dataFile("state.json"))
+	h.loadWeatherCache()
 
 	for _, e := range h.history {
 		if e.Date == h.todayStr() && e.Mood != "" {
@@ -319,6 +324,12 @@ func (h *HydrapotionApp) AddWater(ml int) {
 	h.saveHistory()
 	h.mu.Unlock()
 
+	// Modo headless (hydrapotion add): sin UI ni timer interno;
+	// los recordatorios los gestiona el systemd timer.
+	if h.headless {
+		return
+	}
+
 	if h.onUpdate != nil {
 		h.onUpdate()
 	}
@@ -429,22 +440,6 @@ func (h *HydrapotionApp) GetWeeklyData() []HistoryEntry {
 		}
 	}
 	return result
-}
-
-func (h *HydrapotionApp) writeStatusFile() {
-	c, g, p, _ := h.GetProgress()
-
-	h.mu.RLock()
-	mood := h.settings.CurrentMood.String()
-	h.mu.RUnlock()
-
-	data, _ := json.Marshal(map[string]interface{}{
-		"consumed": c,
-		"goal":     g,
-		"percent":  math.Round(p*10) / 10,
-		"mood":     mood,
-	})
-	os.WriteFile(h.dataFile("status.json"), data, 0644)
 }
 
 func searchLocation(query string) ([]GeoResult, error) {
@@ -565,6 +560,8 @@ func (h *HydrapotionApp) startReminderTimer() {
 
 	duration := h.dynamicInterval()
 	h.reminder = time.AfterFunc(duration, func() {
+		// Compartir con el modo headless para no duplicar notificaciones.
+		h.markNotified(time.Now())
 		fyne.Do(func() { h.showReminderPopup() })
 	})
 }
@@ -657,6 +654,7 @@ func (h *HydrapotionApp) snoozeReminder(minutes int) {
 		h.reminder.Stop()
 	}
 	h.reminder = time.AfterFunc(time.Duration(minutes)*time.Minute, func() {
+		h.markNotified(time.Now())
 		fyne.Do(func() { h.showReminderPopup() })
 	})
 }
@@ -766,8 +764,10 @@ func (r *circleRender) Refresh() {
 	canvas.Refresh(r.det)
 }
 
-func (r *circleRender) Objects() []fyne.CanvasObject { return []fyne.CanvasObject{r.rast, r.pct, r.det} }
-func (r *circleRender) Destroy()                      {}
+func (r *circleRender) Objects() []fyne.CanvasObject {
+	return []fyne.CanvasObject{r.rast, r.pct, r.det}
+}
+func (r *circleRender) Destroy() {}
 
 func (c *CircularProgress) draw(w, h int) image.Image {
 	size := w
@@ -912,7 +912,7 @@ func (r *cardRender) Refresh() {
 }
 
 func (r *cardRender) Objects() []fyne.CanvasObject { return []fyne.CanvasObject{r.wrapped} }
-func (r *cardRender) Destroy()                      {}
+func (r *cardRender) Destroy()                     {}
 
 // glassIcon renders a pixel icon of a glass/bottle for the given ml.
 func glassIcon(ml int, w, h int, clr color.Color) *image.RGBA {
@@ -1193,7 +1193,7 @@ func (r *chartRender) Layout(s fyne.Size) {
 		barW = (float32(chartW) - gap*(float32(n)+1)) / float32(n)
 	}
 
-		// Y=0 label
+	// Y=0 label
 	r.y0.Move(fyne.NewPos(4, s.Height-bottom-9))
 	r.y0.Resize(fyne.NewSize(left-8, 14))
 
@@ -1436,7 +1436,6 @@ func (h *HydrapotionApp) CreateMainUI() fyne.CanvasObject {
 		circ.Goal = g
 		circ.Refresh()
 		chart.SetData(h.GetWeeklyData(), h.CalculateGoal())
-		h.writeStatusFile()
 	}
 	h.onUpdate()
 
@@ -1719,6 +1718,15 @@ func (h *HydrapotionApp) setupSystemTray() {
 // Entry point
 // ----------------------------------------------------------------
 func main() {
+	// Subcomandos headless (sin Fyne/OpenGL): --remind, add, status, --version
+	if len(os.Args) > 1 && runHeadless(os.Args[1:]) {
+		return
+	}
+
+	// Ajuste de RAM para la GUI: GC más agresivo + tope blando de heap.
+	debug.SetGCPercent(50)
+	debug.SetMemoryLimit(192 << 20)
+
 	a := app.NewWithID("hydrapotion")
 	w := a.NewWindow("Hydrapotion")
 	a.Settings().SetTheme(theme.DarkTheme())

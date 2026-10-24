@@ -1,0 +1,17 @@
+[Unit]
+Description=Hydrapotion GUI (opcional, autostart al login)
+# NOTA: la GUI es opcional. Los recordatorios funcionan aunque esta
+# unidad esté deshabilitada, gracias al timer hydrapotion-reminder.
+
+[Service]
+ExecStart=%h/.local/bin/hydrapotion
+Restart=on-failure
+RestartSec=5
+# Presupuesto de RAM para la GUI (Fyne/OpenGL)
+Environment=GOMEMLIMIT=192MiB
+Environment=GOGC=50
+MemoryHigh=256M
+MemoryMax=512M
+
+[Install]
+WantedBy=graphical-session.target
