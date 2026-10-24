@@ -21,12 +21,20 @@ type Serving struct {
 //     (fórmula OMS ~75 mmol/L ≈ 1,7 g Na/L)
 //   - agua de coco 250 ml ≈ 105 mg Na (~400 mg/L; además aporta potasio)
 //   - caldo / consomé 250 ml ≈ 500 mg Na (casero ligero; enorme variabilidad)
+//   - pizca de sal (dos dedos) en el agua ya registrada ≈ 150 mg Na
+//     (~0,4 g de sal; sin volumen: el agua ya se contó como agua)
+//
+// Las bebidas (Ml > 0) escalan al último agua registrado; la pizca es fija.
 var Servings = []Serving{
 	{"isotonic", 500, 250},
 	{"ors", 250, 430},
 	{"coconut", 250, 105},
 	{"broth", 250, 500},
+	{"salt", 0, 150},
 }
+
+// SaltPinchID — identificador de la pizca de sal (única porción sin volumen).
+const SaltPinchID = "salt"
 
 // NaPerMl — concentración genérica (isotónica) para estimar el sodio de
 // volúmenes arbitrarios registrados por CLI (hydrapotion electro <ml>).
@@ -48,6 +56,19 @@ func FindByID(id string) (Serving, bool) {
 		}
 	}
 	return Serving{}, false
+}
+
+// FollowsWater — las bebidas (Ml > 0) escalan con el último agua registrado
+// (el vaso o el termo que acabas de tomar); la pizca de sal es fija.
+func FollowsWater(s Serving) bool { return s.Ml > 0 }
+
+// ScaleNa — sodio estimado de la porción al volumen real tomado. La pizca
+// de sal (y cualquier porción sin volumen) devuelve su sodio fijo.
+func ScaleNa(s Serving, ml int) int {
+	if s.Ml <= 0 || ml <= 0 {
+		return s.SodiumMg
+	}
+	return int(float64(s.SodiumMg)*float64(ml)/float64(s.Ml) + 0.5)
 }
 
 // DailyTarget — dosis de electrolitos de referencia por día:

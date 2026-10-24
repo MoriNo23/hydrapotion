@@ -106,6 +106,7 @@ var translations = map[string]map[string]string{
 	"electro_ors":      {"es": "Suero oral", "en": "ORS drink", "zh": "口服补液"},
 	"electro_coconut":  {"es": "Agua de coco", "en": "Coconut water", "zh": "椰子水"},
 	"electro_broth":    {"es": "Caldo", "en": "Broth", "zh": "清汤"},
+	"electro_salt":     {"es": "Pizca de sal", "en": "Pinch of salt", "zh": "一撮盐"},
 	"electro_status":   {"es": "%d/%d dosis · ~%d mg Na", "en": "%d/%d servings · ~%d mg Na", "zh": "%d/%d 份 · 约%d毫克钠"},
 	"csv_h_electro":    {"es": "Electrolitos (ml)", "en": "Electrolytes (ml)", "zh": "电解质（毫升）"},
 	"csv_h_na":         {"es": "Sodio est. (mg)", "en": "Est. sodium (mg)", "zh": "钠估算（毫克）"},
@@ -576,6 +577,44 @@ func (h *HydrapotionApp) ElectroTarget() int {
 	return electro.DailyTarget(h.weather.Temperature, true)
 }
 
+// LastWaterMl devuelve el volumen del último registro de agua de hoy (el
+// vaso o el termo que acabas de tomar); 0 si aún no se registró agua.
+func (h *HydrapotionApp) LastWaterMl() int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	today := h.todayStr()
+	for _, entry := range h.history {
+		if entry.Date != today {
+			continue
+		}
+		last := 0
+		for _, l := range entry.Logs {
+			if l.Kind != "electro" {
+				last = l.Ml
+			}
+		}
+		return last
+	}
+	return 0
+}
+
+// ResolveElectroMl — volumen que registrará una porción de electrolitos:
+// las bebidas siguen al último agua marcado (vaso 250, termo del gimnasio
+// 750...); sin registros hoy usan su volumen por defecto. Tope 2000 ml.
+func (h *HydrapotionApp) ResolveElectroMl(s electro.Serving) int {
+	if !electro.FollowsWater(s) {
+		return 0 // pizca de sal: no añade volumen
+	}
+	lw := h.LastWaterMl()
+	if lw <= 0 {
+		return s.Ml
+	}
+	if lw > 2000 {
+		lw = 2000
+	}
+	return lw
+}
+
 func searchLocation(query string) ([]GeoResult, error) {
 	encoded := url.QueryEscape(query)
 	apiURL := fmt.Sprintf("https://geocoding-api.open-meteo.com/v1/search?name=%s&count=5&language=es&format=json", encoded)
@@ -832,17 +871,41 @@ func NewWaterCard(ml int, onClick func()) *WaterCard {
 }
 
 // NewElectroCard crea la celda compacta de una porción de electrolitos.
+// Las bebidas dejan el contador vacío para que muestre EN VIVO el volumen
+// que registrarían (siguen al último agua marcado); la pizca de sal muestra
+// su sodio fijo.
 func NewElectroCard(s electro.Serving, onClick func()) *WaterCard {
 	w := &WaterCard{
-		ml:      s.Ml,
-		label:   fmt.Sprintf("%d ml", s.Ml),
 		icon:    electroIcon(s.ID, 48, 64),
 		sub:     T("electro_" + s.ID),
 		small:   true,
 		onClick: onClick,
 	}
+	if electro.FollowsWater(s) {
+		w.ml = s.Ml // contador vivo: "%d ml" con SetVolume
+	} else {
+		w.label = fmt.Sprintf("~%d mg Na", s.SodiumMg)
+	}
 	w.ExtendBaseWidget(w)
 	return w
+}
+
+// currentLabel — texto del contador según el estado de la tarjeta.
+func (c *WaterCard) currentLabel() string {
+	if c.label != "" {
+		return c.label
+	}
+	return fmt.Sprintf("%d ml", c.ml)
+}
+
+// SetVolume actualiza el volumen mostrado (tarjetas de bebida que siguen al
+// último agua registrado). Las porciones con etiqueta fija lo ignoran.
+func (c *WaterCard) SetVolume(ml int) {
+	if c.label != "" || c.ml == ml {
+		return
+	}
+	c.ml = ml
+	canvas.Refresh(c)
 }
 
 func (c *WaterCard) Tapped(*fyne.PointEvent) { c.onClick() }
@@ -870,10 +933,7 @@ func (c *WaterCard) CreateRenderer() fyne.WidgetRenderer {
 	icon.FillMode = canvas.ImageFillContain
 	icon.SetMinSize(fyne.NewSize(36, 44))
 
-	txt := c.label
-	if txt == "" {
-		txt = fmt.Sprintf("%d ml", c.ml)
-	}
+	txt := c.currentLabel()
 	ml := canvas.NewText(txt, repInk)
 	ml.Alignment = fyne.TextAlignCenter
 	ml.TextSize = 13
@@ -939,6 +999,9 @@ func (r *cardRender) Refresh() {
 		r.bg.StrokeColor = repRule
 	}
 	canvas.Refresh(r.bg)
+	// El contador es vivo (SetVolume): se relee del estado de la tarjeta.
+	r.ml.Text = r.card.currentLabel()
+	canvas.Refresh(r.ml)
 }
 
 func (r *cardRender) Objects() []fyne.CanvasObject { return []fyne.CanvasObject{r.wrapped} }
@@ -1107,7 +1170,8 @@ func drawBottle(img *image.RGBA, clr color.Color) {
 // ----------------------------------------------------------------
 
 // electroIcon dibuja el glifo de una porción de electrolitos en verde musgo:
-// botella con etiqueta (isotónica), bolsa de suero, coco con pajita, cuenco.
+// botella con etiqueta (isotónica), bolsa de suero, coco con pajita, cuenco
+// y salero (pizca de sal).
 func electroIcon(id string, w, h int) *image.RGBA {
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	switch id {
@@ -1120,8 +1184,30 @@ func electroIcon(id string, w, h int) *image.RGBA {
 		drawCoconut(img, repMoss)
 	case "broth":
 		drawBowl(img, repMoss)
+	case "salt":
+		drawShaker(img, repMoss)
 	}
 	return img
+}
+
+// drawShaker — salero para la pizca de sal: tapa con poros y cuerpo cónico.
+func drawShaker(img *image.RGBA, clr color.Color) {
+	w, h := img.Bounds().Dx(), img.Bounds().Dy()
+	cx := w / 2
+	// cuerpo cónico (más ancho abajo)
+	topHalf, botHalf := w*7/48, w*11/48
+	y0, y1 := h*3/8, h*3/4
+	for y := y0; y < y1; y++ {
+		t := float64(y-y0) / float64(y1-y0)
+		half := int(float64(topHalf)*(1-t) + float64(botHalf)*t)
+		repHLine(img, cx-half, cx+half, y, clr)
+	}
+	// tapa
+	repFillRect(img, cx-w/6, h/4, cx+w/6, y0, clr)
+	// poros de la tapa
+	for _, px := range []int{cx - w/10, cx, cx + w/10} {
+		repFillRect(img, px-1, h/4+1, px+1, h/4+3, repPaper)
+	}
 }
 
 // drawLabelBand pinta una banda horizontal (etiqueta) sobre el cuerpo del
@@ -1560,20 +1646,37 @@ func (h *HydrapotionApp) CreateMainUI() fyne.CanvasObject {
 	chart := NewWaterChart()
 
 	// Electrolitos: mini-tarjetas por porción + estado del día en la cabecera.
-	electroCards := make([]fyne.CanvasObject, 0, len(electro.Servings))
-	for _, s := range electro.Servings {
-		electroCards = append(electroCards, NewElectroCard(s, func() {
-			h.AddElectro(s.Ml, s.SodiumMg)
-			playSound("add_water.wav")
-		}))
+	// Las bebidas muestran EN VIVO el volumen que registrarán (siguen al
+	// último agua marcado: vaso, termo...); la pizca de sal es fija.
+	type electroCell struct {
+		card *WaterCard
+		s    electro.Serving
 	}
-	electroGrid := container.NewGridWithColumns(len(electro.Servings), electroCards...)
+	cells := make([]electroCell, 0, len(electro.Servings))
+	for _, s := range electro.Servings {
+		card := NewElectroCard(s, func() {
+			vol := h.ResolveElectroMl(s)
+			h.AddElectro(vol, electro.ScaleNa(s, vol))
+			playSound("add_water.wav")
+		})
+		cells = append(cells, electroCell{card, s})
+	}
+	electroObjs := make([]fyne.CanvasObject, 0, len(cells))
+	for _, c := range cells {
+		electroObjs = append(electroObjs, c.card)
+	}
+	electroGrid := container.NewGridWithColumns(3, electroObjs...)
 
 	electroStatus := canvas.NewText("", repInkMuted)
 	electroStatus.TextStyle = fyne.TextStyle{Monospace: true}
 	electroStatus.TextSize = 10
 	electroStatus.Alignment = fyne.TextAlignTrailing
 	updateElectro := func() {
+		for _, c := range cells {
+			if electro.FollowsWater(c.s) {
+				c.card.SetVolume(h.ResolveElectroMl(c.s))
+			}
+		}
 		st := h.ElectroStats()
 		electroStatus.Text = fmt.Sprintf(T("electro_status"), st.Dosis, h.ElectroTarget(), st.Na)
 		canvas.Refresh(electroStatus)

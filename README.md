@@ -119,7 +119,7 @@ The reminder interval uses the same weather logic (see
 ## Electrolytes
 
 Electrolyte intake is tracked **separately from water** (it does not count
-toward the water goal). Four predefined servings ship with the app, each with
+toward the water goal). Five predefined servings ship with the app, each with
 an estimated sodium content based on typical concentrations:
 
 | Serving | Volume | Est. sodium |
@@ -128,6 +128,13 @@ an estimated sodium content based on typical concentrations:
 | Oral rehydration solution (WHO-style) | 250 ml | ~430 mg Na |
 | Coconut water | 250 ml | ~105 mg Na |
 | Broth | 250 ml | ~500 mg Na |
+| Pinch of salt (in water you already logged) | — | ~150 mg Na |
+
+Servings are not rigid: **drinks follow the last water you logged** — a glass
+(~250 ml), a gym thermos (~750 ml), whatever you just drank — and the cards
+show that live volume; the sodium estimate scales with it. With no water
+logged yet they fall back to their default volume. The pinch of salt adds
+only sodium (the water was already counted as water).
 
 Daily reference: **2 servings**, +1 when the configured weather reads ≥ 30 °C
 (`internal/electro`, pure and unit-tested). The header shows

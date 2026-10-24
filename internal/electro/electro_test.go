@@ -62,13 +62,56 @@ func TestServingsSane(t *testing.T) {
 			t.Fatalf("ID duplicado: %s", s.ID)
 		}
 		seen[s.ID] = true
-		if s.Ml <= 0 || s.Ml > 2000 {
+		if s.Ml < 0 || s.Ml > 2000 {
 			t.Fatalf("porción %s: volumen fuera de rango: %d", s.ID, s.Ml)
 		}
 		if s.SodiumMg <= 0 || s.SodiumMg > 1500 {
 			t.Fatalf("porción %s: sodio estimado fuera de rango: %d", s.ID, s.SodiumMg)
 		}
-		// Cada porción debe tener su clave i18n (la UI usa "electro_"+ID).
-		_ = s.ID
+		if s.Ml == 0 && s.ID != SaltPinchID {
+			t.Fatalf("porción %s sin volumen y no es la pizca de sal", s.ID)
+		}
+	}
+	if _, ok := FindByID(SaltPinchID); !ok {
+		t.Fatal("falta la porción pizca de sal")
+	}
+}
+
+func TestFollowsWater(t *testing.T) {
+	iso, _ := FindByID("isotonic")
+	salt, _ := FindByID(SaltPinchID)
+	if !FollowsWater(iso) {
+		t.Fatal("la isotónica debe seguir al último agua registrado")
+	}
+	if FollowsWater(salt) {
+		t.Fatal("la pizca de sal es fija, no sigue al agua")
+	}
+}
+
+func TestScaleNa(t *testing.T) {
+	iso, _ := FindByID("isotonic") // 500 ml / 250 mg Na
+	cases := []struct {
+		name string
+		ml   int
+		want int
+	}{
+		{"porción por defecto", 500, 250},
+		{"vaso 250", 250, 125},
+		{"termo 750", 750, 375},
+		{"termo 1L", 1000, 500},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := ScaleNa(iso, c.ml); got != c.want {
+				t.Fatalf("ScaleNa(isotonic, %d) = %d; want %d", c.ml, got, c.want)
+			}
+		})
+	}
+	salt, _ := FindByID(SaltPinchID)
+	if got := ScaleNa(salt, 0); got != 150 {
+		t.Fatalf("ScaleNa(salt, 0) = %d; want 150", got)
+	}
+	if got := ScaleNa(salt, 999); got != 150 {
+		t.Fatalf("ScaleNa(salt, 999) = %d; want 150 (fija)", got)
 	}
 }
