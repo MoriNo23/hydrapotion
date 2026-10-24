@@ -9,3 +9,4 @@ Terminal=false
 Categories=Utility;
 Keywords=agua;hidratación;water;hydration;
 StartupNotify=false
+StartupWMClass=hydrapotion
