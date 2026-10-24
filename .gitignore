@@ -28,3 +28,7 @@ temp/
 
 # Instrucciones del agente (no committear)
 AGENTS.md
+
+# impeccable engine (se auto-descarga al primer uso)
+.github/skills/impeccable/scripts/bin/
+.opencode/skills/impeccable/scripts/bin/
