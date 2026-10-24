@@ -26,10 +26,13 @@ jobs:
       - name: Install system deps
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq libgl1-mesa-dev xorg-dev
+          sudo apt-get install -y -qq libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev libegl-dev
 
       - name: Build
         run: go build -o hydrapotion -ldflags="-s -w" .
+
+      - name: Test
+        run: go test ./...
 
       - name: Upload binary (CI)
         uses: actions/upload-artifact@v4

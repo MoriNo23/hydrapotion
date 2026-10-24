@@ -15,6 +15,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -26,6 +27,9 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+
+	"hydrapotion/internal/goal"
+	"hydrapotion/internal/reminder"
 )
 
 // ----------------------------------------------------------------
@@ -64,6 +68,10 @@ var translations = map[string]map[string]string{
 	"export_data":     {"es": "Exportar datos", "en": "Export data", "zh": "导出数据"},
 	"export_json":     {"es": "Exportar JSON", "en": "Export JSON", "zh": "导出 JSON"},
 	"export_csv":      {"es": "Exportar CSV", "en": "Export CSV", "zh": "导出 CSV"},
+	"csv_h_date":      {"es": "Fecha", "en": "Date", "zh": "日期"},
+	"csv_h_ml":        {"es": "ml", "en": "ml", "zh": "ml"},
+	"csv_h_mood":      {"es": "Estado de ánimo", "en": "Mood", "zh": "心情"},
+	"sound":           {"es": "Sonidos", "en": "Sounds", "zh": "声音"},
 	"close":           {"es": "Cerrar", "en": "Close", "zh": "关闭"},
 	"export":          {"es": "Exportar", "en": "Export", "zh": "导出"},
 	"json_saved":      {"es": "JSON guardado", "en": "JSON saved", "zh": "JSON 已保存"},
@@ -138,6 +146,8 @@ type Settings struct {
 	LocationLon      float64 `json:"location_lon"`
 	ReminderInterval int     `json:"reminder_interval"`
 	CurrentMood      Mood    `json:"current_mood"`
+	// SoundOn nil = default activado (archivos viejos sin la clave).
+	SoundOn *bool `json:"sound_on,omitempty"`
 }
 
 type HistoryEntry struct {
@@ -239,6 +249,9 @@ func (h *HydrapotionApp) loadSettings() {
 		return
 	}
 	json.Unmarshal(data, &h.settings)
+	if h.settings.SoundOn != nil {
+		soundEnabled.Store(*h.settings.SoundOn)
+	}
 }
 
 func (h *HydrapotionApp) saveSettings() {
@@ -274,43 +287,21 @@ func (h *HydrapotionApp) resetIfNewDay() {
 }
 
 func (h *HydrapotionApp) CalculateGoal() int {
-	baseGoal := h.settings.Weight * 35
-
-	heightBonus := 0
-	if h.settings.Height > 150 {
-		heightBonus = (h.settings.Height - 150) * 5
+	temp, hum, has := 0.0, 0.0, false
+	if h.weather != nil {
+		temp, hum, has = h.weather.Temperature, h.weather.Humidity, true
 	}
-
-	moodBonus := 0
-	switch h.settings.CurrentMood {
-	case MoodTense:
-		moodBonus = 400
-	case MoodLow:
-		moodBonus = 200
-	}
-
-	return baseGoal + heightBonus + moodBonus + h.weatherBonus()
+	return goal.Total(h.settings.Weight, h.settings.Height, h.settings.CurrentMood.String(), temp, hum, has)
 }
 
 // weatherBonus suma ml según el clima (≥25° +200, ≥30° +400, ≥35° +600,
 // humedad >60% +100). Compartida por la meta y el sello del hidrógrafo.
+// La fórmula vive en internal/goal (pura y testeada).
 func (h *HydrapotionApp) weatherBonus() int {
 	if h.weather == nil {
 		return 0
 	}
-	b := 0
-	switch {
-	case h.weather.Temperature >= 35:
-		b = 600
-	case h.weather.Temperature >= 30:
-		b = 400
-	case h.weather.Temperature >= 25:
-		b = 200
-	}
-	if h.weather.Humidity > 60 {
-		b += 100
-	}
-	return b
+	return goal.WeatherBonus(h.weather.Temperature, h.weather.Humidity, true)
 }
 
 func (h *HydrapotionApp) AddWater(ml int) {
@@ -536,52 +527,17 @@ func (h *HydrapotionApp) fetchWeather() {
 }
 
 func (h *HydrapotionApp) dynamicInterval() time.Duration {
-	base := time.Duration(h.settings.ReminderInterval) * time.Second
-	if base <= 0 {
-		base = 2 * time.Hour
-	}
-
-	hour := time.Now().Hour()
-	var timeFactor float64
-	switch {
-	case hour >= 6 && hour < 12:
-		timeFactor = 0.8
-	case hour >= 12 && hour < 18:
-		timeFactor = 0.7
-	case hour >= 18 && hour < 22:
-		timeFactor = 1.0
-	default:
-		timeFactor = 2.0
-	}
-
-	weatherFactor := 1.0
+	temp, hum, has := 0.0, 0.0, false
 	if h.weather != nil {
-		switch {
-		case h.weather.Temperature >= 35:
-			weatherFactor = 0.5
-		case h.weather.Temperature >= 30:
-			weatherFactor = 0.6
-		case h.weather.Temperature >= 25:
-			weatherFactor = 0.8
-		}
-		if h.weather.Humidity > 70 {
-			weatherFactor *= 0.9
-		}
+		temp, hum, has = h.weather.Temperature, h.weather.Humidity, true
 	}
-
-	factor := timeFactor * weatherFactor
-	if factor < 0.5 {
-		factor = 0.5
-	}
-
-	d := time.Duration(float64(base) * factor)
-	if d < 30*time.Minute {
-		d = 30 * time.Minute
-	}
-	if d > 6*time.Hour {
-		d = 6 * time.Hour
-	}
-	return d
+	return time.Duration(reminder.IntervalSeconds(reminder.Input{
+		BaseIntervalSeconds: h.settings.ReminderInterval,
+		Hour:                time.Now().Hour(),
+		TempC:               temp,
+		HumidityPct:         hum,
+		HasWeather:          has,
+	})) * time.Second
 }
 
 func (h *HydrapotionApp) startReminderTimer() {
@@ -704,29 +660,37 @@ func notifySend(title, message string) {
 
 var appSoundDir string
 
+// soundEnabled — interruptor global del toggle de ajustes (default: activado).
+var soundEnabled = atomicBool(true)
+
+func atomicBool(v bool) *atomic.Value {
+	var a atomic.Value
+	a.Store(v)
+	return &a
+}
+
 func initSounds() {
 	home, _ := os.UserHomeDir()
 	appSoundDir = filepath.Join(home, ".hydrapotion", "sounds")
 	os.MkdirAll(appSoundDir, 0755)
 
-	for _, name := range []string{"popup_appear.wav", "add_water.wav"} {
-		src := filepath.Join(home, "Descargas", "Hydrapotion", name)
+	// Los .wav viajan embebidos en el binario: se extraen al caché local
+	// solo si faltan (paplay reproduce desde archivo).
+	for _, name := range []string{"add_water.wav", "popup_appear.wav"} {
 		dst := filepath.Join(appSoundDir, name)
-		if _, err := os.Stat(src); err == nil {
-			copyFile(src, dst)
+		if _, err := os.Stat(dst); err == nil {
+			continue
+		}
+		if data, err := soundFS.ReadFile("assets/" + name); err == nil {
+			os.WriteFile(dst, data, 0644)
 		}
 	}
 }
 
-func copyFile(src, dst string) error {
-	data, err := os.ReadFile(src)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(dst, data, 0644)
-}
-
 func playSound(soundPath string) {
+	if !soundEnabled.Load().(bool) {
+		return
+	}
 	if appSoundDir == "" {
 		initSounds()
 	}
@@ -1454,6 +1418,17 @@ func (h *HydrapotionApp) buildSettingsContent(d fyne.Window) fyne.CanvasObject {
 		h.showLocationDialog()
 	})
 
+	soundCheck := widget.NewCheck(T("sound"), func(on bool) {
+		soundEnabled.Store(on)
+		h.settings.SoundOn = &on
+		h.saveSettings()
+	})
+	if h.settings.SoundOn != nil {
+		soundCheck.SetChecked(*h.settings.SoundOn)
+	} else {
+		soundCheck.SetChecked(true)
+	}
+
 	closeBtn := widget.NewButton(T("close"), func() { d.Hide() })
 
 	sec := func(t string) fyne.CanvasObject {
@@ -1475,6 +1450,9 @@ func (h *HydrapotionApp) buildSettingsContent(d fyne.Window) fyne.CanvasObject {
 		sec(T("location")),
 		locLabel,
 		locBtn,
+		widget.NewSeparator(),
+		sec(T("sound")),
+		soundCheck,
 		widget.NewSeparator(),
 		sec(T("export_data")),
 		widget.NewButton(T("export_json"), func() { h.exportJSON(d) }),
@@ -1587,12 +1565,25 @@ func (h *HydrapotionApp) exportCSV(w fyne.Window) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
+	// Cabeceras y valores de ánimo en el idioma de la interfaz:
+	// el CSV suele ir al médico/hoja de cálculo del usuario.
+	moodLocalized := map[string]string{
+		"Bien":    T("mood_well"),
+		"Neutral": T("mood_neutral"),
+		"Bajo":    T("mood_low"),
+		"Tenso":   T("mood_tense"),
+	}
+
 	var buf bytes.Buffer
-	buf.WriteString("Date,ml,Mood\n")
+	buf.WriteString(fmt.Sprintf("%s,%s,%s\n", T("csv_h_date"), T("csv_h_ml"), T("csv_h_mood")))
 	for _, e := range h.history {
-		mood := e.Mood
-		if mood == "" {
-			mood = "-"
+		mood := "-"
+		if e.Mood != "" {
+			if m, ok := moodLocalized[e.Mood]; ok {
+				mood = m
+			} else {
+				mood = e.Mood
+			}
 		}
 		buf.WriteString(fmt.Sprintf("%s,%d,%s\n", e.Date, e.Ml, mood))
 	}
@@ -1646,6 +1637,7 @@ func main() {
 	debug.SetMemoryLimit(192 << 20)
 
 	a := app.NewWithID("hydrapotion")
+	a.SetIcon(fyne.NewStaticResource("icon.png", iconPNG))
 	w := a.NewWindow("Hydrapotion")
 	a.Settings().SetTheme(newReportTheme())
 
