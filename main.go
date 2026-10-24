@@ -24,6 +24,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/fyne/v2/lang"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -1430,6 +1431,9 @@ func (h *HydrapotionApp) buildSettingsContent(d fyne.Window) fyne.CanvasObject {
 	}
 
 	closeBtn := widget.NewButton(T("close"), func() { d.Hide() })
+	verLabel := widget.NewLabelWithStyle(fmt.Sprintf("Hydrapotion %s", version),
+		fyne.TextAlignCenter, fyne.TextStyle{Monospace: true})
+	verLabel.Importance = widget.MediumImportance
 
 	sec := func(t string) fyne.CanvasObject {
 		l := widget.NewLabelWithStyle(t, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
@@ -1459,6 +1463,7 @@ func (h *HydrapotionApp) buildSettingsContent(d fyne.Window) fyne.CanvasObject {
 		widget.NewButton(T("export_csv"), func() { h.exportCSV(d) }),
 		layout.NewSpacer(),
 		widget.NewSeparator(),
+		verLabel,
 		closeBtn,
 	)
 }
@@ -1640,6 +1645,14 @@ func main() {
 	a.SetIcon(fyne.NewStaticResource("icon.png", iconPNG))
 	w := a.NewWindow("Hydrapotion")
 	a.Settings().SetTheme(newReportTheme())
+
+	// Fyne no trae todos sus textos internos en español (p. ej. el placeholder
+	// "(Select one)" del widget.Select) y ensuciaba el log con "Translation failure".
+	// Registramos las claves que faltan; el idioma se deduce del nombre "es.json".
+	if err := lang.AddTranslations(fyne.NewStaticResource("es.json", []byte(
+		`{"(Select one)": "(Seleccione uno)"}`))); err != nil {
+		fyne.LogError("hydrapotion: no se pudo registrar el bundle de traducción es", err)
+	}
 
 	h := NewHydrapotionApp(a)
 	h.mainWindow = w
